@@ -7,7 +7,7 @@
 #include <muduo/net/EventLoopThread.h>
 #include <iostream>
 #include <string>
-
+#include <thread>
 class DictClient
 {
     private:
@@ -33,6 +33,7 @@ class DictClient
         {
             std::string res = buf->retrieveAllAsString();
             std::cout<<res<<std::endl;
+            std::cout<<std::this_thread::get_id()<<std::endl;
         }
     public:
         DictClient(const std::string ip,int port):
@@ -64,6 +65,7 @@ int main(int argc,char **argv)
     std::string query;
     while(true)
     {
+        std::cout<<std::this_thread::get_id()<<std::endl;
         std::cin>>query;
         client.send(query);
     }
