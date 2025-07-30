@@ -119,9 +119,9 @@ namespace MyRpc
 #define KEY_HOST_IP "ip"
 #define KEY_HOST_PORT "port"
 #define KEY_RCODE "rcode"
-#define KEY_RESULT "result
+#define KEY_RESULT "result"
 
-    enum class MType
+    enum class Mtype
     {
         REQ_RPC = 0,
         RSP_RPC,
