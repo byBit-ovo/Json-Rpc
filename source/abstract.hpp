@@ -1,5 +1,7 @@
+#pragma once
 #include <functional>
 #include <memory>
+#include "enum.hpp"
 #include "Util.hpp"
 namespace MyRpc
 {

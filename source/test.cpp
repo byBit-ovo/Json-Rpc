@@ -1,10 +1,26 @@
 #include "Util.hpp"
+class A{
+    public:
+        virtual void func1()
+        {
 
+        }
+};
+class B
+{
+    public:
+        virtual void func2()
+        {
+
+        }
+};
+class C:public A ,public B
+{
+
+};
 int main()
 {
-    for (int i = 0; i < 10; ++i)
-    {
-        std::cout << Uuid::uuid() << std::endl;
-    }
+    C* p = new C();
+    delete p;  
     return 0;
 }
