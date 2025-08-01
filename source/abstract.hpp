@@ -12,7 +12,7 @@ namespace MyRpc
             Mtype _type;
             std::string _id;
         public:
-            using ptr = std::shared_ptr<BufferBase>;
+            using ptr = std::shared_ptr<MessageBase>;
             ~MessageBase(){}
             virtual void SetId(const std::string& id){
                 _id = id;
@@ -59,10 +59,10 @@ namespace MyRpc
     using ConnectionCallBack = std::function<void(const ConnectionBase::ptr&)>;
     using CloseCallBack = std::function<void(const ConnectionBase::ptr&)>;
     using MessageCallBack = std::function<void(const ConnectionBase::ptr&, BufferBase::ptr&)>;
-    using ptr = std::shared_ptr<ServerBase>;
     class ServerBase
     {
         public:
+            using ptr = std::shared_ptr<ServerBase>;
             virtual void SetConnectionCallBack(const ConnectionCallBack& func){
                 _connection_call_back = func;
             }
@@ -102,6 +102,6 @@ namespace MyRpc
             virtual void send(const MessageBase::ptr& msg)=0;
             virtual bool connected() = 0;
             virtual ConnectionBase::ptr connection()=0; 
-    }
+    };
 
 }
