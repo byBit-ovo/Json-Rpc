@@ -177,11 +177,11 @@ namespace MyRpc
                     ELOG("服务请求中方法操作类型错误!");
                     return false;
                 }
-                //服务注册，上线，下线，都需要HOST
+                //服务注册，上线，下线，都需要HOST 服务发现请求不需要
                 if(_body[KEY_OPTYPE].asInt() != static_cast<int>(ServiceOptype::SERVICE_DISCOVERY) &&
                    _body[KEY_HOST].isNull() || _body[KEY_HOST].isObject() == false ||
-                   _body[KEY_HOST_IP].isNull() || _body[KEY_HOST_IP].isString() == false||
-                   _body[KEY_HOST_PORT].isNull() || _body[KEY_HOST_PORT].isIntegral() == false){
+                   _body[KEY_HOST][KEY_HOST_IP].isNull() || _body[KEY_HOST][KEY_HOST_IP].isString() == false||
+                   _body[KEY_HOST][KEY_HOST_PORT].isNull() || _body[KEY_HOST][KEY_HOST_PORT].isIntegral() == false){
                     ELOG("服务请求中主机地址不存在或者主机类型错误!"); 
                     return false;
                 }
@@ -235,11 +235,11 @@ namespace MyRpc
                     return false;
 
                 }
-                //规定Rpc响应中的结果都以对象存储
-                if(_body[KEY_RESULT].isObject() == false){
-                    ELOG("Rpc响应中结果类型错误!");
-                    return false;
-                }
+                //规定Rpc响应中的结果都以对象存储,不够灵活,不考虑
+                // if(_body[KEY_RESULT].isObject() == false){
+                //     ELOG("Rpc响应中结果类型错误!");
+                //     return false;
+                // }
                 return true;
             }
             
@@ -282,7 +282,7 @@ namespace MyRpc
                 }
                 if(_body[KEY_OPTYPE].asInt() == static_cast<int>(ServiceOptype::SERVICE_DISCOVERY) &&
                 (_body[KEY_HOST].isNull() || _body[KEY_HOST].isArray() ==  false ||
-                _body[KEY_METHOD].isNull() || _body[KEY_METHOD].isString() == false ))
+                 _body[KEY_METHOD].isNull() || _body[KEY_METHOD].isString() == false ))
                 {
                     ELOG("服务发现响应中 KEYHOST or KEY_METHOD 缺失或类型错误!");
                     return false;
@@ -305,7 +305,7 @@ namespace MyRpc
             {
                 _body[KEY_METHOD] = method;
             }
-            void setHost(std::vector<Address>& addrs)
+            void setHosts(std::vector<Address>& addrs)
             {
                 for(const auto& addr: addrs)
                 {
