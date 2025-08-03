@@ -1,5 +1,5 @@
 INCLUDE = -I ../muduo/release-install-cpp11/include/
-LIB     = -L  ../muduo/release-install-cpp11/lib/ -lmuduo_net  -lmuduo_base -lpthread
+LIB     = -L  ../muduo/release-install-cpp11/lib/ -lmuduo_net  -lmuduo_base -lpthread -ljsoncpp
 
 .PHONY:all clean
 all: DictServer DictClient

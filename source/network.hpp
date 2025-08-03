@@ -6,6 +6,8 @@
 #include "abstract.hpp"
 #include "message.hpp"
 #include <arpa/inet.h>
+#include <unordered_map>
+#include <mutex>
 namespace MyRpc
 {
     class RpcBuffer : public BufferBase
@@ -169,19 +171,64 @@ namespace MyRpc
         muduo::net::EventLoop _baseloop;
         muduo::net::TcpServer _tcpsvr;
         ProtocolBase::ptr _protocol;
+        std::unordered_map<muduo::net::TcpConnectionPtr,ConnectionBase::ptr> _connections;
+        std::mutex _lock;
+        static const size_t msgMaxLen;
         void ConnectionCallBack(const muduo::net::TcpConnectionPtr &conn)
         {
             if (conn->connected())
             {
                 ILOG("新链接建立成功!");
+                {
+                    std::lock_guard<std::mutex> guard(_lock);
+                    _connections.insert(std::make_pair(conn, ConnectionFactory::create(_protocol, conn)));
+                }
+                if(_connection_call_back){
+                    _connection_call_back(_connections[conn]);
+                }
             }
             else
             {
-                ILOG("断开连接!");
+                ConnectionBase::ptr rpcConn;
+                ILOG("连接断开!");
+                {
+                    std::lock_guard<std::mutex> guard(_lock);
+                    auto iter  = _connections.find(conn);
+                    if(iter == _connections.end()){
+                        return;
+                    }
+                    rpcConn = iter->second;
+                    _connections.erase(conn);
+                }
+                if(_close_call_back){
+                    _close_call_back(rpcConn);
+                }
             }
         }
         void MessageCallBack(const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buf, muduo::Timestamp)
         {
+            auto buf_base = BufferFactory::create(buf);
+            while(true)
+            {
+                if(_protocol->canProceed(buf_base) == false){
+                    if(buf_base->readableSize() >= msgMaxLen){
+                        conn->shutdown();
+                        ELOG("缓冲区数据过长!");
+                        return;
+                    }
+                    break;
+                }
+                MessageBase::ptr msg;
+                if(_protocol->recieveAmessage(buf_base,msg) == false){
+                    conn->shutdown();
+                    ELOG("缓冲区数据解析错误!");
+                    break;
+                }
+                
+
+            }
         }
     };
+
+    const size_t RpcServer::msgMaxLen = (1 << 16);
 }
