@@ -42,8 +42,8 @@ namespace MyRpc
     {
         public:
             using ptr = std::shared_ptr<ProtocolBase>;
-            virtual bool canProcess(const BufferBase::ptr& buffer) = 0;
-            virtual bool Onmessage(const BufferBase::ptr& buffer, MessageBase::ptr& msg) = 0;
+            virtual bool canProceed(const BufferBase::ptr& buffer) = 0;
+            virtual bool recieveAmessage(const BufferBase::ptr& buffer, MessageBase::ptr& msg) = 0;
             virtual std::string serialize(const MessageBase::ptr& buffer) = 0;
     };
 
