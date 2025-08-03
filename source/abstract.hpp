@@ -73,7 +73,7 @@ namespace MyRpc
                 _message_call_back = func;
             }
             virtual void start() = 0;
-        private:
+        protected:
             ConnectionCallBack _connection_call_back;
             CloseCallBack _close_call_back;
             MessageCallBack _message_call_back;
