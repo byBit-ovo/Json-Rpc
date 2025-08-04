@@ -64,15 +64,21 @@ namespace MyRpc
         //|--4bytes---|-----------------headLen bytes----------------|
         virtual bool canProceed(const BufferBase::ptr &buffer) override
         {
-            int len = buffer->peekInt();
+            if(buffer->readableSize() < _headLen){
+                return false;
+            }
+            int32_t len = ntohl(buffer->peekInt());
+            // int32_t len = buffer->peekInt();
+            ILOG("headLen: %d, buffer->size: %ld", len, buffer->readableSize());
             return buffer->readableSize() >= len + _headLen;
         }
         virtual bool recieveAmessage(const BufferBase::ptr &buffer, MessageBase::ptr &msg) override
         {
             // 在调用此函数之前需要先判断canProceed
-            int len = buffer->readInt32();
-            int mtype = buffer->readInt32();
-            int idlen = buffer->readInt32();
+            int32_t len = ntohl(buffer->readInt32());
+            DLOG("%d",len);
+            int32_t mtype = ntohl(buffer->readInt32());
+            int32_t idlen = ntohl(buffer->readInt32());
             std::string id = buffer->readAsString(idlen);
             std::string body = buffer->readAsString(len - _typeLen - _idLen - idlen);
             msg = MessageFactory::create(static_cast<Mtype>(mtype));
@@ -91,21 +97,22 @@ namespace MyRpc
             //|--headLen--|--Mtype--|--idLen-- |------id--------|--body--|
             std::string body = msg->serialize();
             std::string id = msg->GetId();
-            int mtype = htonl(static_cast<int>(msg->GetType()));
-            int len = htonl(_typeLen + _idLen + id.size() + body.size());
+            int32_t mtype = htonl(static_cast<int>(msg->GetType()));
+            int32_t len = htonl(_typeLen + _idLen + id.size() + body.size());
             std::stringstream ss;
             ss << len << mtype << htonl(id.size()) << id << body;
+            // DLOG("序列化数据：%s", ss.str());
             return ss.str();
         }
 
     private:
-        static const size_t _headLen;
-        static const size_t _typeLen;
-        static const size_t _idLen;
+        static const int32_t _headLen;
+        static const int32_t _typeLen;
+        static const int32_t _idLen;
     };
-    const size_t RpcProtocol::_headLen = sizeof(int);
-    const size_t RpcProtocol::_typeLen = sizeof(int);
-    const size_t RpcProtocol::_idLen = sizeof(int);
+    const int32_t RpcProtocol::_headLen = sizeof(int);
+    const int32_t RpcProtocol::_typeLen = sizeof(int);
+    const int32_t RpcProtocol::_idLen = sizeof(int);
 
     class ProtocolFactory
     {
@@ -126,6 +133,7 @@ namespace MyRpc
         virtual void send(const MessageBase::ptr &msg) override
         {
             std::string message = _protocol->serialize(msg);
+            ILOG("序列化数据：%s", message.c_str());
             _conn->send(message);
         }
         virtual void shutDown() override
@@ -218,6 +226,7 @@ namespace MyRpc
             {
                 if (_protocol->canProceed(buf_base) == false)
                 {
+                    ELOG("消息不够一条完整的数据");
                     if (buf_base->readableSize() >= msgMaxLen)
                     {
                         conn->shutdown();
@@ -245,6 +254,7 @@ namespace MyRpc
                     }
                     rpcConn = iter->second;
                 }
+                ILOG("接收到一条完整的请求");
                 if (_message_call_back)
                 {
                     _message_call_back(rpcConn, msg);
@@ -257,7 +267,7 @@ namespace MyRpc
     {
     public:
         template <typename... Args>
-        ServerBase::ptr create(Args... args)
+        static ServerBase::ptr create(Args... args)
         {
             return std::make_shared<MuduoServer>(std::forward<Args>(args)...);
         }

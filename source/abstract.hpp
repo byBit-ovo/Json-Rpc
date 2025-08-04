@@ -69,7 +69,7 @@ namespace MyRpc
             virtual void SetCloseCallBack(const CloseCallBack& func){
                 _close_call_back = func;
             }
-            virtual void SetConnectionCallBack(const MessageCallBack& func){
+            virtual void SetMessageCallBack(const MessageCallBack& func){
                 _message_call_back = func;
             }
             virtual void start() = 0;
@@ -96,7 +96,7 @@ namespace MyRpc
             virtual void SetCloseCallBack(const CloseCallBack& func){
                 _close_call_back = func;
             }
-            virtual void SetConnectionCallBack(const MessageCallBack& func){
+            virtual void SetMessageCallBack(const MessageCallBack& func){
                 _message_call_back = func;
             }
             virtual void connect() = 0;

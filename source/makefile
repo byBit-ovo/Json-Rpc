@@ -1,8 +1,11 @@
 INCLUDE = -I../muduo/release-install-cpp11/include/
 LIB     = -L../muduo/release-install-cpp11/lib/ -lmuduo_net  -lmuduo_base -lpthread -ljsoncpp
 
-.PHONY: clean
-test: test.cpp
-	g++ $^ -o $@ $(INCLUDE) $(LIB)
+.PHONY: clean all
+all: server client
+server: server.cpp
+	g++ $^ -o $@ $(INCLUDE) $(LIB) -g
+client: client.cpp 
+	g++ $^ -o $@ $(INCLUDE) $(LIB) -g
 clean:
-	rm test
+	rm server client
