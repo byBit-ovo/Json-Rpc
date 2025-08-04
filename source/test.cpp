@@ -78,9 +78,10 @@ int main()
 {
     // RpcMessageTest();
     // TopicTest();
-    ServiceTest();
+    // ServiceTest();
     // Json::Value root;
     // root["hello"];
     // std::cout<< JsonUtil::serialize(root);
+    std::cout<<(1<<16)<<std::endl;
     return 0;
 }

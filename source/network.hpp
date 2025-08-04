@@ -2,19 +2,22 @@
 #include "muduo/net/Buffer.h"
 #include "muduo/net/TcpConnection.h"
 #include "muduo/net/TcpServer.h"
+#include "muduo/net/TcpClient.h"
 #include "muduo/net/EventLoop.h"
+#include <muduo/net/EventLoopThread.h>
 #include "abstract.hpp"
 #include "message.hpp"
 #include <arpa/inet.h>
 #include <unordered_map>
 #include <mutex>
+#include <thread>
 namespace MyRpc
 {
     class MuduoBuffer : public BufferBase
     {
     public:
         using ptr = std::shared_ptr<MuduoBuffer>;
-        RpcBuffer(muduo::net::Buffer *buf) : _buf(buf) {}
+        MuduoBuffer(muduo::net::Buffer *buf) : _buf(buf) {}
         virtual size_t readableSize()
         {
             return _buf->readableBytes();
@@ -118,8 +121,7 @@ namespace MyRpc
     {
     public:
         using ptr = std::shared_ptr<RpcConnection>;
-        RpcConnection(const ProtocolBase::ptr &protocol, const muduo::net::TcpConnectionPtr &conn) :
-         _protocol(protocol), _conn(conn) {}
+        RpcConnection(const ProtocolBase::ptr &protocol, const muduo::net::TcpConnectionPtr &conn) : _protocol(protocol), _conn(conn) {}
 
         virtual void send(const MessageBase::ptr &msg) override
         {
@@ -154,11 +156,12 @@ namespace MyRpc
     public:
         using ptr = std::shared_ptr<MuduoServer>;
         MuduoServer(int port) : _tcpsvr(&_baseloop, muduo::net::InetAddress("0.0.0.0", port),
-        "MuduoServer", muduo::net::TcpServer::kReusePort),_protocol(ProtocolFactory::create())
+                                        "MuduoServer", muduo::net::TcpServer::kReusePort),
+                                        _protocol(ProtocolFactory::create())
         {
             _tcpsvr.setConnectionCallback(std::bind(&MuduoServer::ConnectionCallBack, this, std::placeholders::_1));
-            _tcpsvr.setMessageCallback(std::bind(&MuduoServer::MessageCallBack, this, 
-            std::placeholders::_1,std::placeholders::_2, std::placeholders::_3));
+            _tcpsvr.setMessageCallback(std::bind(&MuduoServer::MessageCallBack, this,
+                                       std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         }
 
         virtual void start()
@@ -171,7 +174,7 @@ namespace MyRpc
         muduo::net::EventLoop _baseloop;
         muduo::net::TcpServer _tcpsvr;
         ProtocolBase::ptr _protocol;
-        std::unordered_map<muduo::net::TcpConnectionPtr,ConnectionBase::ptr> _connections;
+        std::unordered_map<muduo::net::TcpConnectionPtr, ConnectionBase::ptr> _connections;
         std::mutex _lock;
         static const size_t msgMaxLen;
         void ConnectionCallBack(const muduo::net::TcpConnectionPtr &conn)
@@ -183,7 +186,8 @@ namespace MyRpc
                     std::lock_guard<std::mutex> guard(_lock);
                     _connections.insert(std::make_pair(conn, ConnectionFactory::create(_protocol, conn)));
                 }
-                if(_connection_call_back){
+                if (_connection_call_back)
+                {
                     _connection_call_back(_connections[conn]);
                 }
             }
@@ -193,14 +197,16 @@ namespace MyRpc
                 ILOG("连接断开!");
                 {
                     std::lock_guard<std::mutex> guard(_lock);
-                    auto iter  = _connections.find(conn);
-                    if(iter == _connections.end()){
+                    auto iter = _connections.find(conn);
+                    if (iter == _connections.end())
+                    {
                         return;
                     }
                     rpcConn = iter->second;
                     _connections.erase(conn);
                 }
-                if(_close_call_back){
+                if (_close_call_back)
+                {
                     _close_call_back(rpcConn);
                 }
             }
@@ -208,39 +214,153 @@ namespace MyRpc
         void MessageCallBack(const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buf, muduo::Timestamp)
         {
             BufferBase::ptr buf_base = BufferFactory::create(buf);
-            while(true)
+            while (true)
             {
-                if(_protocol->canProceed(buf_base) == false){
-                    if(buf_base->readableSize() >= msgMaxLen){
+                if (_protocol->canProceed(buf_base) == false)
+                {
+                    if (buf_base->readableSize() >= msgMaxLen)
+                    {
                         conn->shutdown();
-                        ELOG("缓冲区数据过长!");
+                        ELOG("缓冲区数据过长!连接关闭!");
                         return;
                     }
                     break;
                 }
                 MessageBase::ptr msg;
-                if(_protocol->recieveAmessage(buf_base,msg) == false){
+                if (_protocol->recieveAmessage(buf_base, msg) == false)
+                {
                     conn->shutdown();
-                    ELOG("缓冲区数据解析错误!");
+                    ELOG("缓冲区数据解析错误!连接关闭!");
                     break;
                 }
                 ConnectionBase::ptr rpcConn;
                 {
                     std::lock_guard<std::mutex> guard(_lock);
                     auto iter = _connections.find(conn);
-                    if(iter == _connections.end()){
-                        ELOG("连接关系错误,找不到对应关系!");
+                    if (iter == _connections.end())
+                    {
+                        ELOG("连接关系错误,找不到对应关系!连接关闭!");
                         conn->shutdown();
                         return;
                     }
                     rpcConn = iter->second;
                 }
-                if(_message_call_back){
+                if (_message_call_back)
+                {
                     _message_call_back(rpcConn, msg);
                 }
             }
         }
     };
-
     const size_t MuduoServer::msgMaxLen = (1 << 16);
+    class ServerFactory
+    {
+    public:
+        template <typename... Args>
+        ServerBase::ptr create(Args... args)
+        {
+            return std::make_shared<MuduoServer>(std::forward<Args>(args)...);
+        }
+    };
+
+    class MuduoClient : public ClientBase
+    {
+    public:
+        MuduoClient(const std::string &ip, int port) : _baseloop(_thread.startLoop()),
+            _protocol(ProtocolFactory::create()),
+            _client(_baseloop, muduo::net::InetAddress(ip, port), "client"), _cdl(1) {}
+        virtual void connect() override
+        {
+            _client.setConnectionCallback(std::bind(&MuduoClient::ConnectionCallBack, this, std::placeholders::_1));
+            _client.setMessageCallback(std::bind(&MuduoClient::MessageCallBack, this, std::placeholders::_1,
+                                                 std::placeholders::_2, std::placeholders::_3));
+            _client.connect();
+            // 等待所有子线程就绪，为0时唤醒
+            _cdl.wait();
+        }
+        virtual void shutDown()override{
+            _client.disconnect();
+        }
+        virtual void send(const MessageBase::ptr &msg)override
+        {
+            if(connected())
+                _conn->send(msg);
+        }
+        virtual bool connected(){
+            return _conn && _conn->isConnected();
+        }
+        virtual ConnectionBase::ptr connection()override
+        {
+            return _conn;
+        }
+
+    private:
+        void ConnectionCallBack(const muduo::net::TcpConnectionPtr &conn)
+        {
+            if (conn->connected())
+            {
+                //--count,表示已经有一个资源就绪
+                _cdl.countDown();
+                _conn = ConnectionFactory::create(_protocol, conn);
+                std::cout << "连接服务器成功" << std::endl;
+                if(_connection_call_back){
+                    _connection_call_back(_conn);
+                }
+            }
+            else
+            {
+                std::cout << "断开服务器连接" << std::endl;
+                // _conn.reset();
+                if(_close_call_back){
+                    _close_call_back(_conn);
+                }
+            }
+        }
+        void MessageCallBack(const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buf, muduo::Timestamp)
+        {
+            BufferBase::ptr buf_base = BufferFactory::create(buf);
+            while (true)
+            {
+                if (_protocol->canProceed(buf_base) == false)
+                {
+                    if (buf_base->readableSize() >= msgMaxLen)
+                    { 
+                        conn->shutdown();
+                        ELOG("缓冲区数据过长!连接关闭!");
+                        return;
+                    }
+                    break;
+                }
+                MessageBase::ptr msg;
+                if (_protocol->recieveAmessage(buf_base, msg) == false)
+                {
+                    conn->shutdown();
+                    ELOG("缓冲区数据解析错误!连接关闭!");
+                    break;
+                }
+                if (_message_call_back)
+                {
+                    _message_call_back(_conn, msg);
+                }
+            }
+        }
+        muduo::net::EventLoopThread _thread;
+        muduo::net::EventLoop *_baseloop;
+        ProtocolBase::ptr _protocol;
+        ConnectionBase::ptr _conn;
+        muduo::net::TcpClient _client;
+        muduo::CountDownLatch _cdl;
+        static const size_t msgMaxLen;
+    };
+    const size_t MuduoClient::msgMaxLen = (1<<12);
+
+    class ClientFactory
+    {
+        public:
+            template<typename ...Args>
+            static ClientBase::ptr create(Args ...args)
+            {
+                return std::make_shared<MuduoClient>(std::forward<Args>(args)...);
+            }
+    };
 }

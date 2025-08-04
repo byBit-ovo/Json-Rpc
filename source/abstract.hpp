@@ -83,11 +83,13 @@ namespace MyRpc
     class ClientBase
     {
        
-        private:
+        protected:
             ConnectionCallBack _connection_call_back;
             CloseCallBack _close_call_back;
             MessageCallBack _message_call_back;
         public:
+            using ptr = std::shared_ptr<ClientBase>;
+
             virtual void SetConnectionCallBack(const ConnectionCallBack& func){
                 _connection_call_back = func;
             }
