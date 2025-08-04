@@ -10,10 +10,10 @@
 #include <mutex>
 namespace MyRpc
 {
-    class RpcBuffer : public BufferBase
+    class MuduoBuffer : public BufferBase
     {
     public:
-        using ptr = std::shared_ptr<RpcBuffer>;
+        using ptr = std::shared_ptr<MuduoBuffer>;
         RpcBuffer(muduo::net::Buffer *buf) : _buf(buf) {}
         virtual size_t readableSize()
         {
@@ -46,7 +46,7 @@ namespace MyRpc
         template <class... Args>
         static BufferBase::ptr create(Args &&...args)
         {
-            return std::make_shared<RpcBuffer>(std::forward<Args>(args)...);
+            return std::make_shared<MuduoBuffer>(std::forward<Args>(args)...);
         }
     };
 
@@ -149,15 +149,15 @@ namespace MyRpc
         }
     };
 
-    class RpcServer : public ServerBase
+    class MuduoServer : public ServerBase
     {
     public:
-        using ptr = std::shared_ptr<RpcServer>;
-        RpcServer(int port) : _tcpsvr(&_baseloop, muduo::net::InetAddress("0.0.0.0", port),
+        using ptr = std::shared_ptr<MuduoServer>;
+        MuduoServer(int port) : _tcpsvr(&_baseloop, muduo::net::InetAddress("0.0.0.0", port),
         "MuduoServer", muduo::net::TcpServer::kReusePort),_protocol(ProtocolFactory::create())
         {
-            _tcpsvr.setConnectionCallback(std::bind(&RpcServer::ConnectionCallBack, this, std::placeholders::_1));
-            _tcpsvr.setMessageCallback(std::bind(&RpcServer::MessageCallBack, this, 
+            _tcpsvr.setConnectionCallback(std::bind(&MuduoServer::ConnectionCallBack, this, std::placeholders::_1));
+            _tcpsvr.setMessageCallback(std::bind(&MuduoServer::MessageCallBack, this, 
             std::placeholders::_1,std::placeholders::_2, std::placeholders::_3));
         }
 
@@ -207,7 +207,7 @@ namespace MyRpc
         }
         void MessageCallBack(const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buf, muduo::Timestamp)
         {
-            auto buf_base = BufferFactory::create(buf);
+            BufferBase::ptr buf_base = BufferFactory::create(buf);
             while(true)
             {
                 if(_protocol->canProceed(buf_base) == false){
@@ -224,11 +224,23 @@ namespace MyRpc
                     ELOG("缓冲区数据解析错误!");
                     break;
                 }
-                
-
+                ConnectionBase::ptr rpcConn;
+                {
+                    std::lock_guard<std::mutex> guard(_lock);
+                    auto iter = _connections.find(conn);
+                    if(iter == _connections.end()){
+                        ELOG("连接关系错误,找不到对应关系!");
+                        conn->shutdown();
+                        return;
+                    }
+                    rpcConn = iter->second;
+                }
+                if(_message_call_back){
+                    _message_call_back(rpcConn, msg);
+                }
             }
         }
     };
 
-    const size_t RpcServer::msgMaxLen = (1 << 16);
+    const size_t MuduoServer::msgMaxLen = (1 << 16);
 }

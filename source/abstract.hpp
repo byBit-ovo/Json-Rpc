@@ -58,7 +58,7 @@ namespace MyRpc
 
     using ConnectionCallBack = std::function<void(const ConnectionBase::ptr&)>;
     using CloseCallBack = std::function<void(const ConnectionBase::ptr&)>;
-    using MessageCallBack = std::function<void(const ConnectionBase::ptr&, BufferBase::ptr&)>;
+    using MessageCallBack = std::function<void(const ConnectionBase::ptr&, MessageBase::ptr&)>;
     class ServerBase
     {
         public:
