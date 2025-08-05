@@ -32,10 +32,11 @@ namespace MyRpc
         public:
             using ptr = std::shared_ptr<BufferBase>;
             virtual size_t readableSize() = 0;
-            virtual int peekInt() = 0;
+            virtual int peekInt32() = 0;
             virtual void retrieveInt32() = 0;
             virtual int readInt32() = 0;
             virtual std::string readAsString(size_t len) = 0;
+            virtual std::string retrieveAllAsString() = 0 ;
     };
 
     class ProtocolBase

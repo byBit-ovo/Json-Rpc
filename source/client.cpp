@@ -78,7 +78,7 @@ int main()
     client->connect();
     while (true)
     {
-        sleep(1);
+        sleep(3);
         MyRpc::RpcRequest::ptr rrq = std::dynamic_pointer_cast<MyRpc::RpcRequest>(MyRpc::MessageFactory::create(MyRpc::Mtype::REQ_RPC));
         rrq->SetId(Uuid::uuid());
         rrq->setMethod("Add");

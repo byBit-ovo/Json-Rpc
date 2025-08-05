@@ -4,8 +4,8 @@ LIB     = -L../muduo/release-install-cpp11/lib/ -lmuduo_net  -lmuduo_base -lpthr
 .PHONY: clean all
 all: server client
 server: server.cpp
-	g++ $^ -o $@ $(INCLUDE) $(LIB) -g
+	g++ $^ -o $@ $(INCLUDE) $(LIB) 
 client: client.cpp 
-	g++ $^ -o $@ $(INCLUDE) $(LIB) -g
+	g++ $^ -o $@ $(INCLUDE) $(LIB)
 clean:
 	rm server client

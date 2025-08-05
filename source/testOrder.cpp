@@ -3,9 +3,11 @@
 #include <sstream>
 int main()
 {
-    std::stringstream ss;
-    const char *s = "hello";
-    ss << 32 << s << 9.23;
-    std::cout<<ss.str()<<std::endl;
+    int a = 2;
+    unsigned char *p = reinterpret_cast<unsigned char*>(&a);
+    for(int i = 0;i < sizeof a; ++i)
+    {
+        printf("0x%02x\n", p[i]);
+    }
     return 0;
 }

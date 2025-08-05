@@ -18,25 +18,29 @@ namespace MyRpc
     public:
         using ptr = std::shared_ptr<MuduoBuffer>;
         MuduoBuffer(muduo::net::Buffer *buf) : _buf(buf) {}
-        virtual size_t readableSize()
+        virtual size_t readableSize()override
         {
             return _buf->readableBytes();
         }
-        virtual int peekInt()
+        virtual int peekInt32() override
         {
             return _buf->peekInt32();
         }
-        virtual void retrieveInt32()
+        virtual void retrieveInt32()override
         {
             _buf->retrieveInt32();
         }
-        virtual int readInt32()
+        virtual int readInt32()override
         {
             return _buf->readInt32();
         }
-        virtual std::string readAsString(size_t len)
+        virtual std::string readAsString(size_t len)override
         {
             return _buf->retrieveAsString(len);
+        }
+        virtual std::string retrieveAllAsString()override
+        {
+            return _buf->retrieveAllAsString();
         }
 
     private:
@@ -62,23 +66,27 @@ namespace MyRpc
         //|--headLen--|--Mtype--|--idLen-- |------id--------|--body--|
         //|--4bytes---|--4bytes-|--4bytes--|--idlen bytes---|--body--|
         //|--4bytes---|-----------------headLen bytes----------------|
+        //19461570560603979776182ee89f-9d8a-a504-0000-000000000001
         virtual bool canProceed(const BufferBase::ptr &buffer) override
         {
             if(buffer->readableSize() < _headLen){
                 return false;
             }
-            int32_t len = ntohl(buffer->peekInt());
-            // int32_t len = buffer->peekInt();
-            ILOG("headLen: %d, buffer->size: %ld", len, buffer->readableSize());
+            int32_t len = buffer->peekInt32();
+            DLOG("canProceed: headLen: %d", len);
+            DLOG("canProceed: buffer->size(): %ld", buffer->readableSize());
             return buffer->readableSize() >= len + _headLen;
         }
         virtual bool recieveAmessage(const BufferBase::ptr &buffer, MessageBase::ptr &msg) override
         {
             // 在调用此函数之前需要先判断canProceed
-            int32_t len = ntohl(buffer->readInt32());
-            DLOG("%d",len);
-            int32_t mtype = ntohl(buffer->readInt32());
-            int32_t idlen = ntohl(buffer->readInt32());
+            // Muduo 接口自动将网络序转换为字节序，所以这里不需要转换
+            int32_t len = buffer->readInt32();
+            // DLOG("recieveAmessage : headLen: %d",len);
+            Mtype mtype = static_cast<Mtype>(buffer->readInt32());
+            // DLOG("recieveAmessage : Mtype: %d",static_cast<int>(mtype));
+            int32_t idlen = buffer->readInt32();
+            // DLOG("recieveAmessage : LenOfId: %d",idlen);
             std::string id = buffer->readAsString(idlen);
             std::string body = buffer->readAsString(len - _typeLen - _idLen - idlen);
             msg = MessageFactory::create(static_cast<Mtype>(mtype));
@@ -89,20 +97,36 @@ namespace MyRpc
             }
             msg->deserialize(body);
             msg->SetId(id);
-            msg->SetType(static_cast<Mtype>(mtype));
+            msg->SetType(mtype);
             return true;
         }
-        virtual std::string serialize(const MessageBase::ptr &msg)
+        virtual std::string serialize(const MessageBase::ptr &msg)override
         {
             //|--headLen--|--Mtype--|--idLen-- |------id--------|--body--|
             std::string body = msg->serialize();
             std::string id = msg->GetId();
             int32_t mtype = htonl(static_cast<int>(msg->GetType()));
-            int32_t len = htonl(_typeLen + _idLen + id.size() + body.size());
-            std::stringstream ss;
-            ss << len << mtype << htonl(id.size()) << id << body;
-            // DLOG("序列化数据：%s", ss.str());
-            return ss.str();
+            int32_t hlen = _typeLen + _idLen + id.size() + body.size();
+            int32_t nlen = htonl(hlen);
+            int32_t idlen_h = id.size();
+            int32_t idlen_n = htonl(idlen_h);
+            // 错误，整形不能以字符串的形式传输，必须以固定大小字节的方式传输
+            // std::stringstream ss;
+            // ss << nlen << mtype << idlen_n << id << body;
+            // return ss.str();
+
+            // DLOG("headLen :%d",hlen);
+            // DLOG("Mtype :%d",mtype);
+            // DLOG("id.size() :%ld",id.size());
+            std::string mess;
+            mess.reserve(hlen);
+            mess.append((char*)&nlen, _headLen);
+            mess.append((char*)&mtype, _typeLen);
+            mess.append((char*)&idlen_n, _idLen);
+            //字符串本来就是字节流，不存在字节顺序的问题
+            mess.append(id);
+            mess.append(body);
+            return mess;
         }
 
     private:
@@ -133,7 +157,7 @@ namespace MyRpc
         virtual void send(const MessageBase::ptr &msg) override
         {
             std::string message = _protocol->serialize(msg);
-            ILOG("序列化数据：%s", message.c_str());
+            // DLOG("序列化数据：%s", message.c_str());
             _conn->send(message);
         }
         virtual void shutDown() override
@@ -333,6 +357,7 @@ namespace MyRpc
             {
                 if (_protocol->canProceed(buf_base) == false)
                 {
+                    
                     if (buf_base->readableSize() >= msgMaxLen)
                     { 
                         conn->shutdown();
@@ -348,6 +373,7 @@ namespace MyRpc
                     ELOG("缓冲区数据解析错误!连接关闭!");
                     break;
                 }
+                DLOG("收到完整消息");
                 if (_message_call_back)
                 {
                     _message_call_back(_conn, msg);

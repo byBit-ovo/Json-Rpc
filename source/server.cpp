@@ -75,7 +75,7 @@ void onMessage(const MyRpc::ConnectionBase::ptr& conn, MyRpc::MessageBase::ptr& 
     Json::Value result;
     result["Res"] = 3;
     result["Tips"] = "have a good day!";
-    rrq3->setResult("Have a good time"); 
+    rrq3->setResult(result); 
     conn->send(rrq3);
 }
 int main()
