@@ -73,14 +73,14 @@ namespace MyRpc
                 return false;
             }
             int32_t len = buffer->peekInt32();
-            DLOG("canProceed: headLen: %d", len);
-            DLOG("canProceed: buffer->size(): %ld", buffer->readableSize());
+            // DLOG("canProceed: headLen: %d", len);
+            // DLOG("canProceed: buffer->size(): %ld", buffer->readableSize());
             return buffer->readableSize() >= len + _headLen;
         }
         virtual bool recieveAmessage(const BufferBase::ptr &buffer, MessageBase::ptr &msg) override
         {
             // 在调用此函数之前需要先判断canProceed
-            // Muduo 接口自动将网络序转换为字节序，所以这里不需要转换
+            // Muduo 提取接口自动将网络序转换为字节序，所以这里不需要转换
             int32_t len = buffer->readInt32();
             // DLOG("recieveAmessage : headLen: %d",len);
             Mtype mtype = static_cast<Mtype>(buffer->readInt32());

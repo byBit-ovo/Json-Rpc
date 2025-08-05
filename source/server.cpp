@@ -1,5 +1,6 @@
 #include "message.hpp"
 #include "network.hpp"
+#include "dispatcher.hpp"
 void RpcMessageTest()
 {
     // method 1:
@@ -64,10 +65,10 @@ void ServiceTest(){
     std::cout<<trp->method()<<std::endl;
     std::cout<<static_cast<int>(trp->rcode())<<std::endl;
 }
-void onMessage(const MyRpc::ConnectionBase::ptr& conn, MyRpc::MessageBase::ptr& msg)
+void onMessage(const MyRpc::ConnectionBase::ptr& conn, MyRpc::RpcRequest::ptr& msg)
 {
     std::string body = msg->serialize();
-    ILOG("%s,%s","收到客户端消息：",body.c_str());
+    ILOG("%s,%s","收到RPC请求: ",body.c_str());
     MyRpc::RpcResponse::ptr rrq3 = MyRpc::MessageFactory::create<MyRpc::RpcResponse>();
     rrq3->SetId(Uuid::uuid());
     rrq3->setRcode(MyRpc::Rcode::RCODE_OK); 
@@ -78,10 +79,36 @@ void onMessage(const MyRpc::ConnectionBase::ptr& conn, MyRpc::MessageBase::ptr& 
     rrq3->setResult(result); 
     conn->send(rrq3);
 }
+void onTopic(const MyRpc::ConnectionBase::ptr& conn, MyRpc::TopicRequest::ptr& msg)
+{
+    std::string body = msg->serialize();
+    ILOG("%s,%s","收到Topic请求: ",body.c_str());
+    MyRpc::TopicResponse::ptr rrq3 = MyRpc::MessageFactory::create<MyRpc::TopicResponse>();
+    rrq3->SetId(Uuid::uuid());
+    rrq3->setRcode(MyRpc::Rcode::RCODE_OK); 
+    rrq3->SetType(MyRpc::Mtype::RSP_TOPIC); 
+    conn->send(rrq3);
+}
+void onService(const MyRpc::ConnectionBase::ptr& conn, MyRpc::ServiceRequest::ptr& msg)
+{
+    std::string body = msg->serialize();
+    ILOG("%s,%s","收到Service请求: ",body.c_str());
+    MyRpc::ServiceResponse::ptr rrq3 = MyRpc::MessageFactory::create<MyRpc::ServiceResponse>();
+    rrq3->SetId(Uuid::uuid());
+    rrq3->setRcode(MyRpc::Rcode::RCODE_OK); 
+    rrq3->SetType(MyRpc::Mtype::RSP_SERVICE);
+    rrq3->setMethod("Add"); 
+    conn->send(rrq3);
+}
 int main()
 {
     MyRpc::ServerBase::ptr server = MyRpc::ServerFactory::create(9000);
-    server->SetMessageCallBack(onMessage);
+    MyRpc::Dispatcher::ptr dispatcher = std::make_shared<MyRpc::Dispatcher>();
+    dispatcher->registerHandler(MyRpc::Mtype::REQ_RPC, onMessage);
+    dispatcher->registerHandler(MyRpc::Mtype::REQ_TOPIC, onTopic);
+    dispatcher->registerHandler(MyRpc::Mtype::REQ_SERVICE, onService);
+    auto onmessage = std::bind(&MyRpc::Dispatcher::messageCallBack ,dispatcher.get(),std::placeholders::_1,std::placeholders::_2);
+    server->SetMessageCallBack(onmessage);
     server->start();
     return 0;
 }
