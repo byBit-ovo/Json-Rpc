@@ -104,9 +104,9 @@ int main()
 {
     MyRpc::ServerBase::ptr server = MyRpc::ServerFactory::create(9000);
     MyRpc::Dispatcher::ptr dispatcher = std::make_shared<MyRpc::Dispatcher>();
-    dispatcher->registerHandler(MyRpc::Mtype::REQ_RPC, onMessage);
-    dispatcher->registerHandler(MyRpc::Mtype::REQ_TOPIC, onTopic);
-    dispatcher->registerHandler(MyRpc::Mtype::REQ_SERVICE, onService);
+    dispatcher->registerHandler<MyRpc::RpcRequest>(MyRpc::Mtype::REQ_RPC, onMessage);
+    dispatcher->registerHandler<MyRpc::TopicRequest>(MyRpc::Mtype::REQ_TOPIC, onTopic);
+    dispatcher->registerHandler<MyRpc::ServiceRequest>(MyRpc::Mtype::REQ_SERVICE, onService);
     auto onmessage = std::bind(&MyRpc::Dispatcher::messageCallBack ,dispatcher.get(),std::placeholders::_1,std::placeholders::_2);
     server->SetMessageCallBack(onmessage);
     server->start();

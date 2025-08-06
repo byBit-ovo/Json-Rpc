@@ -6,7 +6,6 @@
 #include "muduo/net/EventLoop.h"
 #include <muduo/net/EventLoopThread.h>
 #include "abstract.hpp"
-#include "message.hpp"
 #include <arpa/inet.h>
 #include <unordered_map>
 #include <mutex>
@@ -110,7 +109,7 @@ namespace MyRpc
             int32_t nlen = htonl(hlen);
             int32_t idlen_h = id.size();
             int32_t idlen_n = htonl(idlen_h);
-            // 错误，整形不能以字符串的形式传输，必须以固定大小字节的方式传输
+            // 错误，整形不能以字符串的形式传输，必须以内存中实际按照Int固定大小字节的方式传输
             // std::stringstream ss;
             // ss << nlen << mtype << idlen_n << id << body;
             // return ss.str();
@@ -250,7 +249,7 @@ namespace MyRpc
             {
                 if (_protocol->canProceed(buf_base) == false)
                 {
-                    ELOG("消息不够一条完整的数据");
+                    // ELOG("消息不够一条完整的数据");
                     if (buf_base->readableSize() >= msgMaxLen)
                     {
                         conn->shutdown();
@@ -278,7 +277,7 @@ namespace MyRpc
                     }
                     rpcConn = iter->second;
                 }
-                ILOG("接收到一条完整的请求");
+                // ILOG("接收到一条完整的请求");
                 if (_message_call_back)
                 {
                     _message_call_back(rpcConn, msg);

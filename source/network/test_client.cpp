@@ -76,7 +76,7 @@ void onTopic(const MyRpc::ConnectionBase::ptr &conn, MyRpc::TopicResponse::ptr &
     std::string body = msg->serialize();
     ILOG("%s,%s", "收到Topic回复: ", body.c_str());
 }
-void onService(const MyRpc::ConnectionBase::ptr &conn, MyRpc::ServiceResponse:ptr &msg)
+void onService(const MyRpc::ConnectionBase::ptr &conn, MyRpc::ServiceResponse::ptr &msg)
 {
     std::string body = msg->serialize();
     ILOG("%s,%s", "收到Service回复: ", body.c_str());
@@ -84,9 +84,9 @@ void onService(const MyRpc::ConnectionBase::ptr &conn, MyRpc::ServiceResponse:pt
 int main()
 {
     MyRpc::Dispatcher::ptr dispatcher = std::make_shared<MyRpc::Dispatcher>();
-    dispatcher->registerHandler(MyRpc::Mtype::RSP_RPC, onMessage);
-    dispatcher->registerHandler(MyRpc::Mtype::RSP_TOPIC, onTopic);
-    dispatcher->registerHandler(MyRpc::Mtype::RSP_SERVICE, onService);
+    dispatcher->registerHandler<MyRpc::RpcResponse>(MyRpc::Mtype::RSP_RPC, onMessage);
+    dispatcher->registerHandler<MyRpc::TopicResponse>(MyRpc::Mtype::RSP_TOPIC, onTopic);
+    dispatcher->registerHandler<MyRpc::ServiceResponse>(MyRpc::Mtype::RSP_SERVICE, onService);
     MyRpc::ClientBase::ptr client = MyRpc::ClientFactory::create("127.0.0.1", 9000);
     auto onmessage = std::bind(&MyRpc::Dispatcher::messageCallBack,dispatcher.get(),std::placeholders::_1,std::placeholders::_2);
     client->SetMessageCallBack(onmessage);
