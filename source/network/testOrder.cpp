@@ -16,5 +16,8 @@ int main()
     Json::Value root;
     root["hello"] = 1;
     std::cout<<typeid(decltype(root["hello"])).name()<<std::endl;
+    int&& a = 1;
+    int b = 1;
+    int &&c = std::move(b);
     return 0;
 }

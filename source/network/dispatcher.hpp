@@ -28,14 +28,15 @@ namespace MyRpc{
         public: 
             using ptr = std::shared_ptr<Dispatcher>;
             //在注册回调函数时，已经明确消息类型，为了方便在回调函数中调用子类接口，可以明确用参数为子类的函数接口，为了兼容，这里用模板
-            //此处的MessageT，为六个消息类型中的某一个
+            //此处的MessageT，在本项目中为三个请求消息类型中的某一个,支持扩展
             template<typename MessageT>
             void registerHandler(Mtype mtype, typename CallBack<MessageT>::Func_t func){
                 std::lock_guard<std::mutex> guard(_lock);
-                //insert, 如果存在，则什么都不做，但是[]会修改原函数
+                //insert, 如果存在，则什么都不做，但是[]会修改原内容
                 typename CallBack<MessageT>::ptr functor = std::make_shared<CallBack<MessageT>>(func);
                 _dispatcher.insert(std::make_pair(mtype, functor));
             }
+            //此函数需要注册到Server的_message_call_back中
             void messageCallBack(const ConnectionBase::ptr& conn, MessageBase::ptr& msg){
                 std::lock_guard<std::mutex> guard(_lock);
                 Mtype mtype = msg->GetType();
@@ -50,6 +51,7 @@ namespace MyRpc{
         private:
             std::mutex _lock;
             //设计使， value能够存储不同的函数类型，利用多态达到目的
+            //根据消息类型 调用对应的回调函数...
             std::unordered_map<Mtype, CallBackBase::ptr> _dispatcher;
     };
 }

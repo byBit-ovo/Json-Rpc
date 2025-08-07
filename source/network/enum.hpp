@@ -17,10 +17,10 @@ namespace MyRpc
     enum class Mtype
     {
         REQ_RPC = 0,
-        RSP_RPC,
-        REQ_TOPIC,
-        RSP_TOPIC,
         REQ_SERVICE,
+        REQ_TOPIC,
+        RSP_RPC,
+        RSP_TOPIC,
         RSP_SERVICE
     };
     enum class Rcode
@@ -34,9 +34,10 @@ namespace MyRpc
         RCODE_NOT_FOUND_SERVICE,
         RCODE_INVALID_OPTYPE,
         RCODE_NOT_FOUND_TOPIC,
-        RCODE_INTERNAL_ERROR
+        RCODE_INTERNAL_ERROR,
+        RCODE_INVALID_RESULT
     };
-    static std::unordered_map<Rcode, std::string> err_map = {
+    static std::unordered_map<Rcode, std::string> RcodeDesc = {
         {Rcode::RCODE_OK, "成功处理！"},
         {Rcode::RCODE_PARSE_FAILED, "消息解析失败！"},
         {Rcode::RCODE_ERROR_MSGTYPE, "消息类型错误！"},
@@ -46,12 +47,12 @@ namespace MyRpc
         {Rcode::RCODE_NOT_FOUND_SERVICE, "没有找到对应的服务！"},
         {Rcode::RCODE_INVALID_OPTYPE, "⽆效的操作类型"},
         {Rcode::RCODE_NOT_FOUND_TOPIC, "没有找到对应的主题！"},
-        {Rcode::RCODE_INTERNAL_ERROR, "内部错误！"}
+        {Rcode::RCODE_INTERNAL_ERROR, "内部错误！"},
+        {Rcode::RCODE_INVALID_RESULT, "结果类型错误!"}
     };
 
-    enum class RType
+    enum class ReqType
     {
-        REQ_SYNC = 0,
         REQ_ASYNC = 0,
         REQ_CALLBACK
     };
@@ -75,8 +76,8 @@ namespace MyRpc
     };
     std::string ErrReason(Rcode code)
     {
-        auto iter = err_map.find(code);
-        if (iter == err_map.end())
+        auto iter = RcodeDesc.find(code);
+        if (iter == RcodeDesc.end())
         {
             return "未知错误";
         }
