@@ -1,3 +1,4 @@
+#pragma once
 #include "../network/network.hpp"
 #include "../network/message.hpp"
 #include "../network/dispatcher.hpp"
@@ -10,6 +11,7 @@ namespace MyRpc
         class Requestor
         {
             public:
+                using ptr = std::shared_ptr<Requestor>;
                 using ResponseCallBack = std::function<void(MessageBase::ptr)>;
                 //将发出的请求保管起来，等到拿到对应的响应，再返回给上层,否则无法确定收到的响应对应哪一条请求
                 struct RequestDesc{
@@ -38,26 +40,27 @@ namespace MyRpc
                     else{
                         ELOG("收到了非Async,非回调请求对应的响应");
                     }
+                    // removeDesc(msg->GetId());
                 }
-                void send(const ConnectionBase::ptr& conn, MessageBase::ptr& msg,ResponseCallBack& call)
+                void send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,ResponseCallBack& call)
                 {
                     RequestDesc::ptr desc = insertDesc(msg,ReqType::REQ_CALLBACK);
                     desc->_call_back = call;
-                    
+                    conn->send(msg);
                 }
                 //异步
                 //上层在发送请求时传入future,将其关联到ReqDesc中的promise,onResponse后，会将收到的响应设置进future,外部通过get获取响应
-                void send(const ConnectionBase::ptr& conn, MessageBase::ptr& msg,std::future<MessageBase::ptr>& resp)
+                void send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,std::future<MessageBase::ptr>& resp)
                 {
                     RequestDesc::ptr desc = insertDesc(msg,ReqType::REQ_ASYNC);
                     resp = desc->_response.get_future();
                     conn->send(msg);
                 }
                 //同步获取响应
-                void send(const ConnectionBase::ptr& conn, MessageBase::ptr& msg,MessageBase::ptr& resp){
+                void send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,MessageBase::ptr& resp){
                     std::future<MessageBase::ptr> resp_future;
                     send(conn,msg,resp_future);
-                    //直接get达到同步的效果
+                    //立即get达到同步的效果
                     resp = resp_future.get();
                 }
             private:
