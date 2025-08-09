@@ -1,5 +1,6 @@
 #include "network.hpp"
 #include "dispatcher.hpp"
+#include "message.hpp"
 void RpcMessageTest()
 {
     // method 1:

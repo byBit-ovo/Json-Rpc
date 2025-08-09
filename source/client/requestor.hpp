@@ -8,22 +8,26 @@ namespace MyRpc
     namespace Client
     {
         //多线程环境中，为了明确客户端接受到的响应对应于哪一条请求，Requestor用于保存请求与响应之间的映射关系
+        //此模块是针对所有Request设计的，因此对响应的处理方法不能写成固定的Json::Value(result),而是MessageBase
         class Requestor
         {
             public:
                 using ptr = std::shared_ptr<Requestor>;
-                using ResponseCallBack = std::function<void(MessageBase::ptr)>;
+                using ResponseCallBack = std::function<void(MessageBase::ptr&)>;
                 //将发出的请求保管起来，等到拿到对应的响应，再返回给上层,否则无法确定收到的响应对应哪一条请求
                 struct RequestDesc{
                     using ptr = std::shared_ptr<RequestDesc>;
                     ReqType _type; 
                     MessageBase::ptr _req;
                     //如果是异步请求，将对应的响应放入到promise
+                    //这里不单是Rpc响应，还有ServiceResponse,TopicResponse,
+                    //因此不能只存std::promise<Json::Value>
                     std::promise<MessageBase::ptr> _response;
                     //如果是同步请求，调用该函数
                     ResponseCallBack _call_back;
                 };
                 //该函数注册给dispatcher, 收到response时，,将response设置进对应的RequestDesc或回调
+                //dispatcher 中的 Mtype::RpcResponse:  onResponse
                 void onResponse(const ConnectionBase::ptr &conn, MessageBase::ptr& msg){
                     auto desc = find(msg->GetId());
                     if(desc.get() == nullptr){
@@ -40,9 +44,14 @@ namespace MyRpc
                     else{
                         ELOG("收到了非Async,非回调请求对应的响应");
                     }
-                    // removeDesc(msg->GetId());
+                    //如果在 std::promise 被析构之前，已经通过 set_value() 或 set_exception() 设置了结果，
+                    //那么关联的 std::future 可以安全地调用 get() 来获取该结果或异常。
+                    removeDesc(msg->GetId());
+                    std::cout<<"接收响应的Thread-id: "<<std::this_thread::get_id()<<std::endl;
+                
                 }
-                void send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,ResponseCallBack& call)
+                //收到响应调用回调处理
+                void send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,const ResponseCallBack& call)
                 {
                     RequestDesc::ptr desc = insertDesc(msg,ReqType::REQ_CALLBACK);
                     desc->_call_back = call;

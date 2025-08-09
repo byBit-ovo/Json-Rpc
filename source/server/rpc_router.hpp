@@ -1,3 +1,4 @@
+#pragma once
 #include "../network/message.hpp"
 #include "../network/network.hpp"
 
@@ -22,6 +23,7 @@ namespace MyRpc
                 ServiceDesc(const Func_t &func,const std::string& name,const parameterType type,
                 const std::unordered_map<std::string, parameterType>& parameters):
                 _call(func),_name(name),_return_type(type),_parameters(parameters){}
+
                 std::string name(){
                     return _name;
                 }
@@ -96,7 +98,7 @@ namespace MyRpc
                     return *this;
                 }
                 ServiceDesc::ptr build() {
-                    return std::make_shared<ServiceDesc>(_name, _parameters, _return_type, _call);
+                    return std::make_shared<ServiceDesc>(_call,_name, _return_type, _parameters);
                 }
             private:
                 ServiceDesc::Func_t _call;
@@ -131,38 +133,42 @@ namespace MyRpc
         //Rpc调用中转服务
         class RpcRouter{
             public:
+                using ptr = std::shared_ptr<RpcRouter>;
                 RpcRouter():_manager(std::make_shared<ServiceManager>())
                 {}
-                //该函数要注册到dispatcher的Rpc请求处，功能是查询服务、校验参数、业务处理后返回结果
-               
+
                 void registerService(const ServiceDesc::ptr& service){
                     _manager->insert(service);
                 }
-            private:
-                void onRpcRequest(const ConnectionBase::ptr conn, RpcRequest::ptr& msg){
+                //该函数要注册到dispatcher的Rpc请求处，功能是查询服务、校验参数、业务处理后返回结果
+                //dispatcher 中的 Mtype::RpcRequest:  onRpcRequest
+                void onRpcRequest(const ConnectionBase::ptr &conn, RpcRequest::ptr& msg){
                     std::string name = msg->method();
                     ServiceDesc::ptr service = _manager->search(name);
                     if(service.get() == nullptr){
                         ELOG("Rpc请求方法不存在!");
-                        return response(conn,Json::Value(),Rcode::RCODE_NOT_FOUND_SERVICE);
+                        return response(conn,Json::Value(),Rcode::RCODE_NOT_FOUND_SERVICE,msg->GetId());
                     }
                     if(service->checkOutParameters(msg->parameters()) == false){
-                        return response(conn,Json::Value(),Rcode::RCODE_INVALID_PARAMS);
+                        return response(conn,Json::Value(),Rcode::RCODE_INVALID_PARAMS,msg->GetId());
                     }
                     Json::Value result;
+                    //调用服务，获取Json-Result
                     if(service->call(msg->parameters(), result) == false){
-                        return response(conn,Json::Value(),Rcode::RCODE_INVALID_RESULT);
+                        return response(conn,Json::Value(),Rcode::RCODE_INVALID_RESULT,msg->GetId());
                     }
-                    return response(conn,result,Rcode::RCODE_OK);
+                    return response(conn,result,Rcode::RCODE_OK,msg->GetId());
                 }
-                void response(const ConnectionBase::ptr& conn, const Json::Value& res, Rcode rcode){
+            private:
+                void response(const ConnectionBase::ptr& conn, const Json::Value& res, Rcode rcode,const std::string& id){
                     RpcResponse::ptr respon = MessageFactory::create<RpcResponse>();
                     respon->setRcode(rcode);
                     respon->setResult(res);
                     respon->SetType(MyRpc::Mtype::RSP_RPC);
-                    respon->SetId(Uuid::uuid());
+                    respon->SetId(id);
                     conn->send(respon);
                 }
+                //管理注册的服务
                 ServiceManager::ptr _manager;
         };
     }
