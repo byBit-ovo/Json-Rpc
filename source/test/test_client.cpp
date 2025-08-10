@@ -123,6 +123,9 @@ void test(){
         sleep(3);
     }
 }
+void jsonCall(const Json::Value& result){
+    std::cout<<"The result is "<<result.asInt()<<std::endl;
+}
 void testCommunication(){
     MyRpc::ClientBase::ptr client = MyRpc::ClientFactory::create("127.0.0.1",10086);
     MyRpc::Client::Requestor::ptr requestor = std::make_shared<MyRpc::Client::Requestor>();
@@ -141,8 +144,22 @@ void testCommunication(){
     para["num1"] = 12;
     para["num2"] = 25;
     if(caller->call(conn,"Add",para,result) != false){ 
-        std::cout<<"发送请求的Thread-id: "<<std::this_thread::get_id()<<std::endl;
         std::cout<<result.asInt()<<std::endl;
+        sleep(1); 
+    }
+    para["num1"] = 4;
+    para["num2"] = 5;
+    if(caller->call(conn,"Add",para,jsonCall) == false){
+        std::cout<<"回调调用错误"<<std::endl;
+    }
+    std::promise<Json::Value> promise_result;
+    
+    auto fu = promise_result.get_future();
+    para["num1"] = 6;
+    para["num2"] = 8;
+    if(caller->call(conn,"Add",para,fu) != false){
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::cout<<fu.get().asInt()<<std::endl;
     }
     conn->shutDown();
 }
