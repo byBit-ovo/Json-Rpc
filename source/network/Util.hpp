@@ -12,15 +12,16 @@
 #include <iostream>
 #include <sstream>
 #include <unordered_map>
-#define LINF 0
-#define LDBG 1
-#define LERR 2
+#define LERR 0
+#define LINF 1
+#define LDBG 2
+//等级小于等于默认等级才打印
 #define LDFT LINF
 FILE *LogPlace = stdout;
 #define LOG(level, format, ...)                                                                                   \
     do                                                                                                            \
     {                                                                                                             \
-        if (level < LDFT)                                                                                         \
+        if (level > LDFT)                                                                                         \
         {                                                                                                         \
             break;                                                                                                \
         }                                                                                                         \

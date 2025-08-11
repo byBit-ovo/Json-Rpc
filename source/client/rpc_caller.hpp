@@ -18,7 +18,12 @@ namespace MyRpc{
                     req->setMethod(method);
                     req->setParameters(parameters);
                     MessageBase::ptr response;
-                    _requestor->send(conn,req,response);
+                    DLOG("准备调用_request->send");
+                    bool ret = _requestor->send(conn,req,response);
+                    if(ret==false){
+                        ELOG("调用同步Rpc请求失败!");
+                        return false;
+                    }
                     RpcResponse::ptr rpc_resp = std::dynamic_pointer_cast<RpcResponse>(response);
                     if(!rpc_resp){
                         ELOG("响应类型转换失败!");
@@ -28,6 +33,7 @@ namespace MyRpc{
                         ELOG("%s: %s",rpc_resp->GetId().c_str(),RcodeDesc[rpc_resp->rcode()].c_str());
                         return false;
                     }
+                    DLOG("响应正常接受");
                     result = rpc_resp->result();
                     return true;
                 }
@@ -42,16 +48,22 @@ namespace MyRpc{
                     //send接收Message::Base,未来会把response设置进传入的future<Message::ptr>中
                     //用户传入的是Json::Value,采用回调处理，在回调函数中对promise设置数据
                     // _requestor->send(conn,req,result);
-                    std::shared_ptr<std::promise<Json::Value>> promise_value;
+                    //第一现场，没构造promise对象,调了一天呜呜呜
+                    // std::shared_ptr<std::promise<Json::Value>> promise_value;
+                    std::shared_ptr<std::promise<Json::Value>> promise_value = std::make_shared<std::promise<Json::Value>>();
                     result = promise_value->get_future();
                     Requestor::ResponseCallBack func = std::bind(&RpcCaller::CallOnAsync,this,promise_value,
                         std::placeholders::_1);
-                    _requestor->send(conn,req,func);
+                    bool ret = _requestor->send(conn,req,func);
+                    if(ret==false)
+                    {
+                        return false;
+                    }
                     return true;
                 }
                 //回调
                 bool call(const ConnectionBase::ptr& conn, const std::string& method,
-                    const Json::Value& parameters,JsonCallBack& call){
+                    const Json::Value& parameters,const JsonCallBack& call){
                     RpcRequest::ptr req = std::dynamic_pointer_cast<RpcRequest>(MessageFactory::create(Mtype::REQ_RPC));
                     req->SetId(Uuid::uuid());
                     req->SetType(Mtype::REQ_RPC);

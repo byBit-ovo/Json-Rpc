@@ -196,8 +196,8 @@ namespace MyRpc
             {
                 _body[KEY_METHOD] = method;
             }
-            TopicOptype serviceOpType(){
-                return static_cast<TopicOptype>(_body[KEY_OPTYPE].asInt());
+            ServiceOptype serviceOpType(){
+                return static_cast<ServiceOptype>(_body[KEY_OPTYPE].asInt());
             }
             void setServiceOpType(ServiceOptype opType){
                 _body[KEY_OPTYPE] = static_cast<int>(opType);

@@ -9,6 +9,7 @@ namespace MyRpc
     {
         //多线程环境中，为了明确客户端接受到的响应对应于哪一条请求，Requestor用于保存请求与响应之间的映射关系
         //此模块是针对所有Request设计的，因此对响应的处理方法不能写成固定的Json::Value(result),而是MessageBase
+        //服务器客户端通用模块
         class Requestor
         {
             public:
@@ -34,6 +35,7 @@ namespace MyRpc
                         ELOG("收到的响应未找到请求描述!请求id: %s", msg->GetId().c_str());
                         return;
                     }
+                    DLOG("收到的响应找到匹配的请求描述");
                     if(desc->_type == ReqType::REQ_ASYNC){
                         desc->_response.set_value(msg);
                     }
@@ -47,30 +49,48 @@ namespace MyRpc
                     //如果在 std::promise 被析构之前，已经通过 set_value() 或 set_exception() 设置了结果，
                     //那么关联的 std::future 可以安全地调用 get() 来获取该结果或异常。
                     removeDesc(msg->GetId());
-                    std::cout<<"接收响应的Thread-id: "<<std::this_thread::get_id()<<std::endl;
                 
                 }
                 //收到响应调用回调处理
-                void send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,const ResponseCallBack& call)
+                bool send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,const ResponseCallBack& call)
                 {
-                    RequestDesc::ptr desc = insertDesc(msg,ReqType::REQ_CALLBACK);
-                    desc->_call_back = call;
+                    RequestDesc::ptr desc = insertDesc(msg,ReqType::REQ_CALLBACK,call);
+                    if(desc.get()==nullptr){
+                        ELOG("构造请求描述失败!");
+                        return false;
+                    }
                     conn->send(msg);
+                    return true;
                 }
                 //异步
                 //上层在发送请求时传入future,将其关联到ReqDesc中的promise,onResponse后，会将收到的响应设置进future,外部通过get获取响应
-                void send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,std::future<MessageBase::ptr>& resp)
+                bool send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,std::future<MessageBase::ptr>& resp)
                 {
+                    DLOG("进入异步requestor: send");
                     RequestDesc::ptr desc = insertDesc(msg,ReqType::REQ_ASYNC);
-                    resp = desc->_response.get_future();
+                    if(desc.get()==nullptr){
+                        ELOG("构造请求描述失败!");
+                        return false;
+                    }
+                    DLOG("准备调用send");
                     conn->send(msg);
+                    DLOG("准备get_futurte");
+                    resp = desc->_response.get_future();
+                    DLOG("离开异步requestor: send");
+                    return true;
                 }
                 //同步获取响应
-                void send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,MessageBase::ptr& resp){
+                bool send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,MessageBase::ptr& resp){
+                    DLOG("进入同步requestor: send");
                     std::future<MessageBase::ptr> resp_future;
-                    send(conn,msg,resp_future);
+                    bool ret = send(conn,msg,resp_future);
+                    if(ret == false){
+                        return false;
+                    }
                     //立即get达到同步的效果
                     resp = resp_future.get();
+                    DLOG("离开同步requestor: send");
+                    return true;
                 }
             private:
                 //添加请求描述
@@ -93,6 +113,8 @@ namespace MyRpc
                 }
                 //查找请求描述
                 RequestDesc::ptr find(const std::string& id){
+                    // 这把锁没加
+                    std::unique_lock<std::mutex> guard(_lock);
                     auto iter = _requests_desc.find(id);
                     if(iter==_requests_desc.end()){
                         return RequestDesc::ptr();

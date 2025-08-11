@@ -14,6 +14,7 @@ namespace MyRpc
 #define KEY_RCODE "rcode"
 #define KEY_RESULT "result"
 
+    //these fields are in message
     enum class Mtype
     {
         REQ_RPC = 0,
@@ -23,6 +24,7 @@ namespace MyRpc
         RSP_TOPIC,
         RSP_SERVICE
     };
+    //these fields are in message
     enum class Rcode
     {
         RCODE_OK = 0,
@@ -50,13 +52,14 @@ namespace MyRpc
         {Rcode::RCODE_INTERNAL_ERROR, "内部错误！"},
         {Rcode::RCODE_INVALID_RESULT, "结果类型错误!"}
     };
-
+    // these fields are in Class: RequestDesc
     enum class ReqType
     {
         REQ_ASYNC = 0,
         REQ_CALLBACK
     };
 
+    // these fields are in messgage body
     enum class TopicOptype
     {
         TOPIC_CREATE = 0,
@@ -66,6 +69,8 @@ namespace MyRpc
         TOPIC_PUBLISH,
         SERVICE_UNKNOW
     };
+
+    // these fields are in messgage body
     enum class ServiceOptype
     {
         SERVICE_REGISTRY = 0,

@@ -189,14 +189,13 @@ namespace MyRpc
         MuduoServer(int port) : _tcpsvr(&_baseloop, muduo::net::InetAddress("0.0.0.0", port),
                                         "MuduoServer", muduo::net::TcpServer::kReusePort),
                                         _protocol(ProtocolFactory::create())
-        {
-            _tcpsvr.setConnectionCallback(std::bind(&MuduoServer::ConnectionCallBack, this, std::placeholders::_1));
-            _tcpsvr.setMessageCallback(std::bind(&MuduoServer::MessageCallBack, this,
-                                       std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-        }
+        {}
 
         virtual void start()
         {
+            _tcpsvr.setConnectionCallback(std::bind(&MuduoServer::ConnectionCallBack, this, std::placeholders::_1));
+            _tcpsvr.setMessageCallback(std::bind(&MuduoServer::MessageCallBack, this,
+                                                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
             _tcpsvr.start();
             _baseloop.loop();
         }
@@ -249,7 +248,7 @@ namespace MyRpc
             {
                 if (_protocol->canProceed(buf_base) == false)
                 {
-                    // ELOG("消息不够一条完整的数据");
+                    ILOG("消息不够一条完整的数据");
                     if (buf_base->readableSize() >= msgMaxLen)
                     {
                         conn->shutdown();
@@ -277,7 +276,7 @@ namespace MyRpc
                     }
                     rpcConn = iter->second;
                 }
-                // ILOG("接收到一条完整的请求");
+                DLOG("MessageCallBack: 接收到一条完整的请求");
                 if (_message_call_back)
                 {
                     _message_call_back(rpcConn, msg);
@@ -304,6 +303,7 @@ namespace MyRpc
             _client(_baseloop, muduo::net::InetAddress(ip, port), "client"), _cdl(1) {}
         virtual void connect() override
         {
+            DLOG("设置回调，连接服务器!");
             _client.setConnectionCallback(std::bind(&MuduoClient::ConnectionCallBack, this, std::placeholders::_1));
             _client.setMessageCallback(std::bind(&MuduoClient::MessageCallBack, this, std::placeholders::_1,
                                                  std::placeholders::_2, std::placeholders::_3));
@@ -316,34 +316,49 @@ namespace MyRpc
         }
         virtual void send(const MessageBase::ptr &msg)override
         {
-            if(connected())
+            if(connected()){
                 _conn->send(msg);
+            }
+            else{
+                DLOG("发送消息失败,连接尚未建立!");
+            }
         }
         virtual bool connected(){
-            return _conn && _conn->isConnected();
+            return (_conn && _conn->isConnected());
         }
         virtual ConnectionBase::ptr connection()override
         {
+            if(_conn.get() == nullptr){
+                ELOG("客户端连接尚未建立,_conn.get()为nullptr");
+            }
             return _conn;
         }
 
     private:
         void ConnectionCallBack(const muduo::net::TcpConnectionPtr &conn)
         {
+            DLOG("进入ConnectionCallBack");
             if (conn->connected())
             {
+                // if(conn.get() != nullptr){
+                //     DLOG("TcpConnection不为空!");
+                // }
+                // else{
+                //     DLOG("TcpConnection为空!");
+
+                // }
                 //--count,表示已经有一个资源就绪
-                _cdl.countDown();
                 _conn = ConnectionFactory::create(_protocol, conn);
-                std::cout << "连接服务器成功" << std::endl;
                 if(_connection_call_back){
                     _connection_call_back(_conn);
                 }
+                //!!!!!!!!!这里一定注意先给_conn赋值，再countDown,否则唤醒的主线程可能拿到空数据导致segement fault !!!!!!!!!!!!!!
+                _cdl.countDown();
             }
             else
             {
-                std::cout << "断开服务器连接" << std::endl;
-                // _conn.reset();
+                ILOG("断开服务器连接");
+                _conn.reset();
                 if(_close_call_back){
                     _close_call_back(_conn);
                 }
