@@ -18,7 +18,7 @@ namespace MyRpc{
                     msg->setHost(host);
                     MessageBase::ptr res;
                     bool ret = _requestor->send(conn,msg,res);
-                    if(ret == false){
+                    if(ret ==  false){
                         ELOG("%s 服务注册失败!",method.c_str());
                         return false;
                     }
@@ -36,6 +36,128 @@ namespace MyRpc{
                 }
             private:
                 Requestor::ptr _requestor;
+        };
+
+        class MethodHosts{
+            public:
+                using ptr = std::shared_ptr<MethodHosts>;
+                MethodHosts():_index(0){}
+                MethodHosts(const std::vector<Address>& hosts):
+                _hosts(hosts.begin(),hosts.end()),_index(0){}
+                //收到服务上线请求后调用
+                void appendHost(const Address &host){
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    _hosts.push_back(host);
+                }
+                void appendHosts(const std::vector<Address> &hosts){
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    for(const Address &host: hosts){
+                        _hosts.push_back(host);
+                    }
+                }
+                //收到服务下线请求后调用
+                void removeHost(const Address &host){
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    for(auto iter = _hosts.begin();iter != _hosts.end();++iter)
+                    {
+                        if(*iter == host){
+                            _hosts.erase(iter);
+                            return;
+                        }
+                    }
+                }
+                Address chooseHost(){
+                    if(isEmpty()){
+                        return Address();
+                    }
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    Address host = _hosts[_index];
+                    _index++;
+                    _index %= _hosts.size();
+                    return host;
+                }
+                bool isEmpty(){
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    return _hosts.empty();
+                }
+            private:
+                std::mutex _mutex;
+                std::vector<Address> _hosts;
+                size_t _index;
+        };
+        class Discoverer{
+            public:
+                using ptr = std::shared_ptr<Discoverer>;
+                Discoverer(const Requestor::ptr &req):_requestor(req){}
+                bool serviceDiscover(const ConnectionBase::ptr &conn, std::string &method, Address &host){
+                    {
+                        std::unique_lock<std::mutex> guard(_mutex);
+                        auto iter = _hosts.find(method);
+                        if(iter != _hosts.end()){
+                            if(iter->second->isEmpty() == false){
+                                host = iter->second->chooseHost();
+                                return true;
+                            }
+                        }
+                    }
+                    //如果找不到，则发起服务发现
+                    auto req = MessageFactory::create<ServiceRequest>();
+                    req->SetId(Uuid::uuid());
+                    req->SetType(Mtype::REQ_SERVICE);
+                    req->setServiceOpType(ServiceOptype::SERVICE_DISCOVERY);
+                    req->setMethod(method);
+                    MessageBase::ptr res;
+                    bool ret = _requestor->send(conn,req,res);
+                    if(ret== false){
+                        ELOG("服务发现失败!");
+                        return false;
+                    }
+                    ServiceResponse::ptr ser_res = std::dynamic_pointer_cast<ServiceResponse>(res);
+                    if(!ser_res){
+                        ELOG("类型转换失败!");
+                        return false;
+                    }
+                    if(ser_res->rcode() != Rcode::RCODE_OK){
+                        ELOG("服务发现失败!: %s", ErrReason(ser_res->rcode()).c_str());
+                        return false;
+                    }
+                    if(ser_res->Hosts().empty()){
+                        ELOG("尚未发现服务提供者!");
+                        return false;
+                    }
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    std::vector<Address> hosts = ser_res->Hosts();
+                    _hosts[ser_res->method()] = std::make_shared<MethodHosts>(hosts);
+                    host = _hosts[ser_res->method()]->chooseHost();
+                    return true;
+                }
+                //该函数提供给 dispatcher 中的 服务上下线请求处理回调函数
+                //服务提供者上下线后，该函数接收请求进行处理
+                void onServiceRequest(const ConnectionBase::ptr &conn,const ServiceRequest::ptr &msg){
+                    if(msg->check() == false){
+                        return;
+                    }
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    //服务上线了
+                    if(msg->serviceOpType() == ServiceOptype::SERVICE_ONLINE){
+                        auto iter = _hosts.find(msg->method());
+                        if(iter == _hosts.end()){
+                            _hosts[msg->method()]  = std::make_shared<MethodHosts>();
+                        }
+                        _hosts[msg->method()]->appendHost(msg->host());
+                    }//服务下线了
+                    else if(msg->serviceOpType() == ServiceOptype::SERVICE_OFFLINE)
+                    {
+                        auto iter = _hosts.find(msg->method());
+                        if(iter != _hosts.end()){
+                            _hosts[msg->method()]->removeHost(msg->host());
+                        }
+                    }
+                }
+            private:
+                Requestor::ptr _requestor;
+                std::unordered_map<std::string, MethodHosts::ptr> _hosts;
+                std::mutex _mutex; 
         };
     }
 }

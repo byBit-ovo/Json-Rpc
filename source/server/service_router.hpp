@@ -77,6 +77,15 @@ namespace MyRpc
                     _conns.erase(conn);
                     return true;
                 }
+                std::vector<Address> getHosts(const std::string &method)
+                {
+                    auto iter = _providers.find(method);
+                    if(iter != _providers.end())
+                    {
+                        return std::vector<Address>(iter->second.begin(), iter->second.end());
+                    }
+                    return {};
+                }
             private:    
                 std::mutex _mutex;
                 //某一个服务的所有提供者
@@ -181,12 +190,15 @@ namespace MyRpc
                     if(optype == ServiceOptype::SERVICE_REGISTRY){
                         _providers->addProvider(msg->host(),conn,msg->method());
                         _discoverers->onlineNotify(msg->method(),msg->host());
+                        return responseRegister(conn,msg);
                     }
                     else if(optype == ServiceOptype::SERVICE_DISCOVERY){
                         _discoverers->addDiscoverer(conn,msg->method());
+                        return responseDiscover(conn,msg);
                     }
                     else{
                         ELOG("ServiceMsg Type Error!");
+                        return responseErr(conn,msg);
                     }
                 }
 
@@ -203,6 +215,39 @@ namespace MyRpc
                     _discoverers->removeDiscover(conn);
                 }
             private:
+                void responseRegister(const ConnectionBase::ptr &conn, const ServiceRequest::ptr &req){
+                    auto res = MessageFactory::create<ServiceResponse>();
+                    res->SetId(req->GetId());
+                    res->SetType(Mtype::RSP_SERVICE);
+                    res->setRcode(Rcode::RCODE_OK);
+                    res->setServiceOpType(ServiceOptype::SERVICE_REGISTRY);
+                    conn->send(res);
+                }
+                void responseDiscover(const ConnectionBase::ptr &conn, const ServiceRequest::ptr &req)
+                {
+                    auto res = MessageFactory::create<ServiceResponse>();
+                    std::string method = req->method();
+                    res->setMethod(method);
+                    res->SetId(req->GetId());
+                    res->SetType(Mtype::RSP_SERVICE);
+                    res->setRcode(Rcode::RCODE_OK);
+                    res->setServiceOpType(ServiceOptype::SERVICE_DISCOVERY);
+                    auto hosts = _providers->getHosts(method);
+                    if(hosts.empty()){
+                        res->setRcode(Rcode::RCODE_NOT_FOUND_SERVICE);
+                    }else{
+                        res->setHosts(hosts);
+                    }
+                    return conn->send(res);
+                }
+                void responseErr(const ConnectionBase::ptr &conn, const ServiceRequest::ptr &req){
+                    auto res = MessageFactory::create<ServiceResponse>();
+                    res->SetId(req->GetId());
+                    res->SetType(Mtype::RSP_SERVICE);
+                    res->setRcode(Rcode::RCODE_INVALID_OPTYPE);
+                    res->setServiceOpType(ServiceOptype::SERVICE_UNKNOW);
+                    conn->send(res);
+                }
                 ProviderManager::ptr _providers;
                 DiscoverManager::ptr _discoverers;
         };

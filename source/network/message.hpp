@@ -305,7 +305,7 @@ namespace MyRpc
             {
                 _body[KEY_METHOD] = method;
             }
-            void setHosts(std::vector<Address>& addrs)
+            void setHosts(const std::vector<Address>& addrs)
             {
                 for(const auto& addr: addrs)
                 {
@@ -315,7 +315,7 @@ namespace MyRpc
                     _body[KEY_HOST].append(value);
                 }
             }
-            std::vector<Address> Hosts()
+            std::vector<Address> Hosts() const
             {
                 std::vector<Address> hosts;
                 for(int i = 0;i<_body[KEY_HOST].size();++i)
