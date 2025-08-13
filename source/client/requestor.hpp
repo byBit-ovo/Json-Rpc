@@ -27,8 +27,8 @@ namespace MyRpc
                     //如果是同步请求，调用该函数
                     ResponseCallBack _call_back;
                 };
-                //该函数注册给dispatcher, 收到response时，,将response设置进对应的RequestDesc或回调
-                //dispatcher 中的 Mtype::RpcResponse:  onResponse
+                //该函数注册给dispatcher, 收到response时，,将response设置进对应的RequestDesc或调用回调函数
+                //dispatcher 中的 Mtype::RpcResponse:  onResponse,针对所有的Response
                 void onResponse(const ConnectionBase::ptr &conn, MessageBase::ptr& msg){
                     auto desc = find(msg->GetId());
                     if(desc.get() == nullptr){
@@ -37,9 +37,11 @@ namespace MyRpc
                     }
                     DLOG("收到的响应找到匹配的请求描述");
                     if(desc->_type == ReqType::REQ_ASYNC){
+                        //收到Response时，将结果放入promise,供上层获取
                         desc->_response.set_value(msg);
                     }
                     else if(desc->_type == ReqType::REQ_CALLBACK){
+                        //收到Response时，调用上层设置好的回调函数
                         if(desc->_call_back)
                             desc->_call_back(msg);
                     }

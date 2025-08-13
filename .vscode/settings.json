@@ -75,6 +75,7 @@
         "io_context": "cpp",
         "netfwd": "cpp",
         "socket": "cpp",
-        "timer": "cpp"
+        "timer": "cpp",
+        "unordered_set": "cpp"
     }
 }
