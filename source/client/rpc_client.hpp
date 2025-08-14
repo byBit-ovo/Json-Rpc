@@ -1,6 +1,7 @@
+#pragma once
 #include "../network/dispatcher.hpp"
 #include "rpc_caller.hpp"
-#include "service_router.hpp"
+#include "service_manager.hpp"
 
 namespace MyRpc{
     namespace Client{
@@ -13,13 +14,13 @@ namespace MyRpc{
                 _requestor(std::make_shared<Requestor>()),
                 _provider(std::make_shared<Provider>(_requestor)),
                 _dispatcher(std::make_shared<Dispatcher>()){
-                    auto rpc_rsp_call = std::bind(&MyRpc::Client::Requestor::onResponse,_requestor.get(),
+                    auto rpc_rsp_call = std::bind(&Client::Requestor::onResponse,_requestor.get(),
                     std::placeholders::_1,std::placeholders::_2);
-                    //向dispatcher注册服务注册响应的回调 
-                    _dispatcher->registerHandler<MyRpc::MessageBase>(MyRpc::Mtype::RSP_SERVICE,rpc_rsp_call);
-                    auto call_back = std::bind(&MyRpc::Dispatcher::messageCallBack,_dispatcher.get(),
+                    //向dispatcher注册 '服务注册响应' 的回调 
+                    _dispatcher->registerHandler<MessageBase>(Mtype::RSP_SERVICE,rpc_rsp_call);
+                    auto call_back = std::bind(&Dispatcher::messageCallBack,_dispatcher.get(),
                     std::placeholders::_1,std::placeholders::_2);
-                    MyRpc::ClientBase::ptr client = MyRpc::ClientFactory::create(ip,port);
+                    ClientBase::ptr client = ClientFactory::create(ip,port);
                     _client->SetMessageCallBack(call_back);
                 }
                 void connect(){
@@ -44,28 +45,29 @@ namespace MyRpc{
             public:
                 using ptr = std::shared_ptr<DiscoverClient>;
                 //构造函数中连接注册中心...
-                DiscoverClient(const std::string &ip, int port):
+                DiscoverClient() = default;
+                DiscoverClient(const std::string &ip, int port,const Discoverer::OfflineCallBack &off_call):
                 _requestor(std::make_shared<Requestor>()),
-                _discoverer(std::make_shared<Discoverer>(_requestor)),
+                _discoverer(std::make_shared<Discoverer>(_requestor,off_call)),
                 _dispatcher(std::make_shared<Dispatcher>()){
-                    auto rpc_rsp_call = std::bind(&MyRpc::Client::Requestor::onResponse,_requestor.get(),
+                    auto rpc_rsp_call = std::bind(&Requestor::onResponse,_requestor.get(),
                     std::placeholders::_1,std::placeholders::_2);
-                    //向dispatchetr注册发现者收到注册响应的回调
-                    _dispatcher->registerHandler<MyRpc::MessageBase>(MyRpc::Mtype::RSP_SERVICE,rpc_rsp_call);
+                    //向dispatchetr注册 '发现者收到发现响应' 的回调
+                    _dispatcher->registerHandler<MessageBase>(Mtype::RSP_SERVICE,rpc_rsp_call);
                     auto line_req = std::bind(&Discoverer::onServiceRequest,_discoverer.get(),
                     std::placeholders::_1,std::placeholders::_2);
-                    //向dispatcher注册发现者收到服务上下线请求的回调
-                    _dispatcher->registerHandler<ServiceRequest>(MyRpc::Mtype::REQ_SERVICE,line_req);
-                    auto call_back = std::bind(&MyRpc::Dispatcher::messageCallBack,_dispatcher.get(),
+                    //向dispatcher注册 '发现者收到服务上下线请求' 的回调
+                    _dispatcher->registerHandler<ServiceRequest>(Mtype::REQ_SERVICE,line_req);
+                    auto call_back = std::bind(&Dispatcher::messageCallBack,_dispatcher.get(),
                     std::placeholders::_1,std::placeholders::_2);
-                    MyRpc::ClientBase::ptr client = MyRpc::ClientFactory::create(ip,port);
+                    ClientBase::ptr client = ClientFactory::create(ip,port);
                     _client->SetMessageCallBack(call_back);
                 }
                 void connect(){
                     _client->connect();
                 }
                 //向注册中心发现服务
-                bool serviceDiscover(std::string &method, Address &host){
+                bool serviceDiscover(const std::string &method, Address &host){
                     if(_client->connected() == false){
                         ELOG("连接尚未建立!");
                         return false;
@@ -80,31 +82,139 @@ namespace MyRpc{
 
         };
 
-        //Rpc调用客户端，同时可以进行服务发现
+        //模式一：Rpc调用客户端
+        //模式二：Rpc服务发现与Rpc调用客户端 
         class RpcClient{
             public:
                 using ptr = std::shared_ptr<RpcClient>;
                 //构造函数中连接注册中心...,选择是否启用服务发现功能
                 //同时决定该ip是服务提供者地址还是服务发现的地址
-                RpcClient(bool enable_discover,const std::string &ip, int port){}
-                //向注册中心发现服务
-                bool serviceDiscover(std::string &method, Address &host);
-                bool call(const std::string& method, const Json::Value& parameters,Json::Value& result){
-                    
+                RpcClient(bool enable_discover,const std::string &ip, int port):
+                _enable_discover(enable_discover),_requestor(std::make_shared<Requestor>()),
+                _caller(std::make_shared<RpcCaller>(_requestor)),
+                _dispatcher(std::make_shared<Dispatcher>()){
+                    auto rpc_rsp_call = std::bind(&Requestor::onResponse,_requestor.get(),
+                    std::placeholders::_1,std::placeholders::_2);
+                    //向dispatchetr注册 'Rpc调用者收到Rpc响应' 的回调
+                    _dispatcher->registerHandler<MessageBase>(Mtype::RSP_RPC,rpc_rsp_call);
+
+                    if(_enable_discover == true){
+                        //该客户端在内部已经注册requestor的回调，所以不需要再注册,但需要向Discoverer传入收到下线通知后的移除连接的回调
+                        auto off_line_call = std::bind(&RpcClient::removeRpcClient,this,std::placeholders::_1);
+                        _discover_client = std::make_shared<DiscoverClient>(ip,port,off_line_call); //地址为注册中心
+                    }else{
+                        //但这里是Muduo客户端，需要注册回调
+                        _rpc_client = ClientFactory::create(ip,port);                 //地址为Rpc提供者
+                        auto call_back = std::bind(&Dispatcher::messageCallBack,_dispatcher.get(),
+                        std::placeholders::_1,std::placeholders::_2);
+                        _rpc_client->SetMessageCallBack(call_back);
+                    }
+                   
                 }
-                bool call(const std::string& method, const Json::Value& parameters,std::future<Json::Value>& result){
+                void connect(){
+                    if(_enable_discover){
+                        _discover_client->connect();
+                    }
+                    else{
+                        _rpc_client->connect();
+                    }
+                }
+                //向注册中心发现服务
+                bool serviceDiscover(std::string &method, Address &host){
+                    //discover 内部会建立method: hosts的关系，所以发现过的服务，直接返回地址进行Rpc调用，不用再次发起发现请求
+                    bool ret = _discover_client->serviceDiscover(method,host);
+                    putRpcClient(host,ClientFactory::create(host.first,host.second));
+                }
+                //同步调用
+                bool call(const std::string& method, const Json::Value& parameters,Json::Value& result){
+                    ClientBase::ptr rpcClient = getAvailableClient(method);
+                    if(rpcClient.get() == nullptr){
+                        return false;
+                    }
+                    return _caller->call(rpcClient->connection(),method,parameters,result);
 
                 }
-                bool call(const std::string& method,const Json::Value& parameters,RpcCaller::JsonCallBack& call){
-                    
+                //异步调用
+                bool call(const std::string& method, const Json::Value& parameters,std::future<Json::Value>& result){
+                    ClientBase::ptr rpcClient = getAvailableClient(method);
+                    if(rpcClient.get() == nullptr){
+                        return false;
+                    }
+                    return _caller->call(rpcClient->connection(),method,parameters,result);
+                }
+                //设置回调，调用
+                bool call(const std::string& method,const Json::Value& parameters,RpcCaller::JsonCallBack& call_back){
+                    ClientBase::ptr rpcClient = getAvailableClient(method);
+                    if(rpcClient.get() == nullptr){
+                        return false;
+                    }
+                    return _caller->call(rpcClient->connection(),method,parameters,call_back);
                 }
             private:
+                ClientBase::ptr getAvailableClient(const std::string &method){
+                    ClientBase::ptr rpcClient;
+                    if(_enable_discover){
+                        Address host;
+                        bool ret = _discover_client->serviceDiscover(method,host);
+                        if(ret == false){
+                            ELOG("服务发现失败：尚未有服务提供者提供该服务...");
+                            return ClientBase::ptr();
+                        }
+                        rpcClient = getRpcClient(host);
+                        if(rpcClient.get() == nullptr){
+                            rpcClient = newRpcClient(host);
+                            putRpcClient(host,rpcClient);
+                        }
+                    }
+                    else
+                    {
+                        rpcClient = _rpc_client;
+                    }
+                    return rpcClient;
+                }
+                ClientBase::ptr newRpcClient(const Address &host){
+                    //但这里是Muduo客户端，需要注册回调
+                    ClientBase::ptr client = ClientFactory::create(host.first,host.second);
+                    auto call_back = std::bind(&Dispatcher::messageCallBack,_dispatcher.get(),
+                        std::placeholders::_1,std::placeholders::_2);
+                    client->SetMessageCallBack(call_back);
+                    client->connect();
+                    return client;
+                }
+                ClientBase::ptr getRpcClient(const Address &host){
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    auto iter = _rpc_clients.find(host);
+                    if(iter==_rpc_clients.end()){
+                        return ClientBase::ptr();
+                    }
+                    return iter->second;
+                }
+                ClientBase::ptr putRpcClient(const Address &host, const ClientBase::ptr &client){
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    _rpc_clients.insert(std::make_pair(host,client));
+                    return _rpc_clients[host];
+                }
+                void removeRpcClient(const Address &host){
+                    std::unique_lock<std::mutex> guard(_mutex);
+                    _rpc_clients.erase(host);
+                }
+            private:
+                struct AddrHash {
+                    std::size_t operator()(const Address &host) {
+                        std::string addr = host.first + std::to_string(host.second);
+                        return std::hash<std::string>{}(addr); 
+                    }
+                };
+
                 bool _enable_discover;
+                Requestor::ptr _requestor;             //发送请求的接口,保存请求描述，根据请求描述来接收响应
                 DiscoverClient::ptr _discover_client;
-                RpcCaller::ptr _caller;
-                Requestor::ptr _requestor;
-                Dispatcher::ptr _dispatcher;
-                ClientBase::ptr _rpc_client;
+                ClientBase::ptr _rpc_client;           //如果没有启用服务发现，则使用此客户端进行Rpc调用
+                RpcCaller::ptr _caller;                //发起Rpc请求
+                Dispatcher::ptr _dispatcher;           //根据消息类型选择不同的回调进行处理
+                std::mutex _mutex;                     
+                // std::unordered_map<std::string, std::vector<ClientBase::ptr>> _rpc_clients;
+                std::unordered_map<Address, ClientBase::ptr,AddrHash> _rpc_clients;  //如果启用了服务发现，则建立该Rpc客户端连接池
 
         };
     }

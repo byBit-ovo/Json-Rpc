@@ -1,3 +1,4 @@
+#pragma once
 #include "../network/network.hpp"
 #include "../network/message.hpp"
 #include <set>
@@ -90,7 +91,7 @@ namespace MyRpc
                 std::mutex _mutex;
                 //某一个服务的所有提供者
                 std::unordered_map<std::string,std::set<Provider::ptr>> _providers;
-                //每个服务者与连接的关系
+                //每个连接与服务者的关系
                 std::unordered_map<ConnectionBase::ptr, Provider::ptr> _conns;
         };
 

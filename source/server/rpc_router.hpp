@@ -142,7 +142,7 @@ namespace MyRpc
                 }
                 //该函数要注册到dispatcher的Rpc请求处，功能是查询服务、校验参数、业务处理后返回结果
                 //dispatcher 中的 Mtype::RpcRequest:  onRpcRequest
-                void onRpcRequest(const ConnectionBase::ptr &conn, RpcRequest::ptr& msg){
+                void onRpcRequest(const ConnectionBase::ptr &conn, const RpcRequest::ptr& msg){
                     std::string name = msg->method();
                     ServiceDesc::ptr service = _manager->search(name);
                     if(service.get() == nullptr){

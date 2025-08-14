@@ -87,9 +87,11 @@ namespace MyRpc{
         };
         class Discoverer{
             public:
+                using OfflineCallBack = std::function<void(const Address &)>;
                 using ptr = std::shared_ptr<Discoverer>;
-                Discoverer(const Requestor::ptr &req):_requestor(req){}
-                bool serviceDiscover(const ConnectionBase::ptr &conn, std::string &method, Address &host){
+                Discoverer(const Requestor::ptr &req,const OfflineCallBack &off_call)
+                :_requestor(req),_offline_call_back(off_call){}
+                bool serviceDiscover(const ConnectionBase::ptr &conn, const std::string &method, Address &host){
                     {
                         std::unique_lock<std::mutex> guard(_mutex);
                         auto iter = _hosts.find(method);
@@ -151,10 +153,17 @@ namespace MyRpc{
                         auto iter = _hosts.find(msg->method());
                         if(iter != _hosts.end()){
                             _hosts[msg->method()]->removeHost(msg->host());
+                            if(_offline_call_back){
+                                _offline_call_back(msg->host());
+                            }
                         }
                     }
                 }
+                void setOfflineCallBack(const OfflineCallBack &call){
+                    _offline_call_back = call;
+                }
             private:
+                OfflineCallBack _offline_call_back;
                 Requestor::ptr _requestor;
                 std::unordered_map<std::string, MethodHosts::ptr> _hosts;
                 std::mutex _mutex; 
