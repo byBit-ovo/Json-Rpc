@@ -107,9 +107,9 @@ namespace MyRpc
                 std::unordered_map<std::string, parameterType> _parameters;
         };
         //服务管理单元，用于服务的增删查
-        class ServiceManager{
+        class RpcServiceManager{
             public:
-                using ptr = std::shared_ptr<ServiceManager>;
+                using ptr = std::shared_ptr<RpcServiceManager>;
                 void insert(const ServiceDesc::ptr& desc){
                     std::lock_guard<std::mutex> guard(_lock);
                     _services.insert(std::make_pair(desc->name(),desc));
@@ -134,7 +134,7 @@ namespace MyRpc
         class RpcRouter{
             public:
                 using ptr = std::shared_ptr<RpcRouter>;
-                RpcRouter():_manager(std::make_shared<ServiceManager>())
+                RpcRouter():_manager(std::make_shared<RpcServiceManager>())
                 {}
 
                 void registerService(const ServiceDesc::ptr& service){
@@ -169,7 +169,7 @@ namespace MyRpc
                     conn->send(respon);
                 }
                 //管理注册的服务
-                ServiceManager::ptr _manager;
+                RpcServiceManager::ptr _manager;
         };
     }
 }

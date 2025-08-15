@@ -48,7 +48,7 @@ namespace MyRpc
                     auto provider = iter->second;
                     //该提供者新增服务
                     provider->appendMethod(method);
-                    
+                    return provider;
                 }
                 //当有一个服务提供者断开连接时，找到Provider,下线他的所有服务,或已经存在的服务者上线新服务时
                 Provider::ptr findProvider(const ConnectionBase::ptr &conn){
@@ -81,11 +81,14 @@ namespace MyRpc
                 std::vector<Address> getHosts(const std::string &method)
                 {
                     auto iter = _providers.find(method);
+                    std::vector<Address> result;
                     if(iter != _providers.end())
                     {
-                        return std::vector<Address>(iter->second.begin(), iter->second.end());
+                        for(const Provider::ptr &provider: iter->second){
+                            result.push_back(provider->host);
+                        }
                     }
-                    return {};
+                    return result;
                 }
             private:    
                 std::mutex _mutex;

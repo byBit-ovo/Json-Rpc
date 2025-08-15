@@ -48,7 +48,7 @@ namespace MyRpc{
                     //send接收Message::Base,未来会把response设置进传入的future<Message::ptr>中
                     //用户传入的是Json::Value,采用回调处理，在回调函数中对promise设置数据
                     // _requestor->send(conn,req,result);
-                    //第一现场，没构造promise对象,调了一天呜呜呜
+                    //第一现场，没构造promise对象,调了一天
                     // std::shared_ptr<std::promise<Json::Value>> promise_value;
                     std::shared_ptr<std::promise<Json::Value>> promise_value = std::make_shared<std::promise<Json::Value>>();
                     result = promise_value->get_future();

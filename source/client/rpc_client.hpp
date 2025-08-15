@@ -2,6 +2,7 @@
 #include "../network/dispatcher.hpp"
 #include "rpc_caller.hpp"
 #include "service_manager.hpp"
+#include "../network/message.hpp"
 
 namespace MyRpc{
     namespace Client{
@@ -111,6 +112,9 @@ namespace MyRpc{
                     }
                    
                 }
+                void shutDown(){
+
+                }
                 void connect(){
                     if(_enable_discover){
                         _discover_client->connect();
@@ -124,6 +128,7 @@ namespace MyRpc{
                     //discover 内部会建立method: hosts的关系，所以发现过的服务，直接返回地址进行Rpc调用，不用再次发起发现请求
                     bool ret = _discover_client->serviceDiscover(method,host);
                     putRpcClient(host,ClientFactory::create(host.first,host.second));
+                    return ret;
                 }
                 //同步调用
                 bool call(const std::string& method, const Json::Value& parameters,Json::Value& result){
@@ -143,7 +148,7 @@ namespace MyRpc{
                     return _caller->call(rpcClient->connection(),method,parameters,result);
                 }
                 //设置回调，调用
-                bool call(const std::string& method,const Json::Value& parameters,RpcCaller::JsonCallBack& call_back){
+                bool call(const std::string& method,const Json::Value& parameters,const RpcCaller::JsonCallBack& call_back){
                     ClientBase::ptr rpcClient = getAvailableClient(method);
                     if(rpcClient.get() == nullptr){
                         return false;
@@ -200,7 +205,7 @@ namespace MyRpc{
                 }
             private:
                 struct AddrHash {
-                    std::size_t operator()(const Address &host) {
+                    std::size_t operator()(const Address &host)const {
                         std::string addr = host.first + std::to_string(host.second);
                         return std::hash<std::string>{}(addr); 
                     }

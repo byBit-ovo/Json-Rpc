@@ -36,29 +36,40 @@ namespace MyRpc{
                 Dispatcher::ptr _dispatcher; 
                 ServiceManager::ptr _service_manager;
         };
-        //Rpc调用服务，同时可以选择是否包含服务注册功能
-        //如果收到服务注册请求，帮客户端转发给服务注册中心
+        //Rpc调用服务，同时可以选择是否包含客户端的服务注册功能
         class RpcServer{
             public:
                 using ptr = std::shared_ptr<RpcServer>;
-                RpcServer(int port):
-                _server(ServerFactory::create(port)),
+                RpcServer(const Address &this_host,bool enable_register = false,const Address &reg_host = Address()):
+                _this_host(this_host),
+                _enable_register(enable_register),
+                _server(ServerFactory::create(this_host.second)),
                 _dispatcher(std::make_shared<Dispatcher>()),
                 _router(std::make_shared<RpcRouter>()){
-                    auto rpc_call = std::bind(&RpcServer::onRpcReq,this,std::placeholders::_1,std::placeholders::_2);
+                    auto rpc_req = std::bind(&RpcRouter::onRpcRequest,_router.get(),
+                    std::placeholders::_1,std::placeholders::_2);
+                    _dispatcher->registerHandler<RpcRequest>(Mtype::REQ_RPC,rpc_req);
+                    auto rpc_call = std::bind(&Dispatcher::messageCallBack,_dispatcher.get(),
+                    std::placeholders::_1,std::placeholders::_2);
                     _server->SetMessageCallBack(rpc_call);
+                    if(_enable_register == true){
+                        _register_client = std::make_shared<Client::RegisterClient>(reg_host.first,reg_host.second);
+                        _register_client->connect();
+                    }
+                    
                 }
                 void registerService(const ServiceDesc::ptr& service){
+                    _router->registerService(service);
+                    if(_enable_register && _register_client.get() != nullptr){
+                        _register_client->registerMethod(service->name(),_this_host);
+                    }
                 }
                 void start(){
                     _server->start();
                 }
             private:
-                void onRpcReq(const ConnectionBase::ptr &conn,const MessageBase::ptr &msg){
-                    auto rpc_req = std::dynamic_pointer_cast<RpcRequest>(msg);
-                    _router->onRpcRequest(conn,rpc_req);
-                }
                 bool _enable_register;
+                Address _this_host;                             //记录本主机公网ip与端口用于发起服务注册
                 Client::RegisterClient::ptr _register_client;
                 ServerBase::ptr _server;
                 Dispatcher::ptr _dispatcher; 

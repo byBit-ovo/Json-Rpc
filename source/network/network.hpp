@@ -6,6 +6,7 @@
 #include "muduo/net/EventLoop.h"
 #include <muduo/net/EventLoopThread.h>
 #include "abstract.hpp"
+#include "message.hpp"
 #include <arpa/inet.h>
 #include <unordered_map>
 #include <mutex>
@@ -88,7 +89,7 @@ namespace MyRpc
             // DLOG("recieveAmessage : LenOfId: %d",idlen);
             std::string id = buffer->readAsString(idlen);
             std::string body = buffer->readAsString(len - _typeLen - _idLen - idlen);
-            msg = MessageFactory::create(static_cast<Mtype>(mtype));
+            msg = MyRpc::MessageFactory::create(static_cast<Mtype>(mtype));
             if (msg.get() == nullptr)
             {
                 ELOG("消息类型错误,解析失败!");

@@ -28,7 +28,7 @@ namespace MyRpc{
                         return false;
                     }
                     if(rsp->rcode() != Rcode::RCODE_OK){
-                        ELOG("服务注册失败: %s", ErrReason(rsp->rcode()));
+                        ELOG("服务注册失败: %s", ErrReason(rsp->rcode()).c_str());
                         return false;
                     }
                     return true;
