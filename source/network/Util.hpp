@@ -16,7 +16,7 @@
 #define LINF 1
 #define LDBG 2
 //等级小于等于默认等级才打印
-#define LDFT LINF
+#define LDFT LDBG
 FILE *LogPlace = stdout;
 #define LOG(level, format, ...)                                                                                   \
     do                                                                                                            \

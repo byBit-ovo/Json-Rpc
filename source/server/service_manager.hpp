@@ -192,11 +192,15 @@ namespace MyRpc
                 {
                     ServiceOptype optype = msg->serviceOpType();
                     if(optype == ServiceOptype::SERVICE_REGISTRY){
+                        DLOG("recieve a service-register request");
+                        DLOG("Method: %s,host:%s: %d",msg->method().c_str(),msg->host().first.c_str(),msg->host().second);
                         _providers->addProvider(msg->host(),conn,msg->method());
                         _discoverers->onlineNotify(msg->method(),msg->host());
                         return responseRegister(conn,msg);
                     }
                     else if(optype == ServiceOptype::SERVICE_DISCOVERY){
+                        DLOG("recieve a service-discover request");
+                        DLOG("Method: %s",msg->method().c_str());
                         _discoverers->addDiscoverer(conn,msg->method());
                         return responseDiscover(conn,msg);
                     }
@@ -210,6 +214,8 @@ namespace MyRpc
                     auto provider = _providers->findProvider(conn);
                     if(provider.get() != nullptr){
                         //服务提供者断开连接，首先给其服务发现者发送下线通知
+                        DLOG("Provider off-line,remove it from service_manager");
+
                         for(auto &method: provider->methods){
                             _discoverers->offlineNotify(method,provider->host);
                         }
@@ -241,6 +247,7 @@ namespace MyRpc
                         res->setRcode(Rcode::RCODE_NOT_FOUND_SERVICE);
                     }else{
                         res->setHosts(hosts);
+                        // DLOG("Response to discover: %s",res->serialize().c_str());
                     }
                     return conn->send(res);
                 }

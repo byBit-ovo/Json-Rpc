@@ -26,6 +26,7 @@ namespace MyRpc{
                     _server->SetCloseCallBack(close_call_back);
                 }
                 void start(){
+                    
                     _server->start();
                 }
             private:
@@ -60,7 +61,7 @@ namespace MyRpc{
                 }
                 void registerService(const ServiceDesc::ptr& service){
                     _router->registerService(service);
-                    if(_enable_register && _register_client.get() != nullptr){
+                    if(_enable_register == true && _register_client.get() != nullptr){
                         _register_client->registerMethod(service->name(),_this_host);
                     }
                 }

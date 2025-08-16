@@ -311,7 +311,9 @@ namespace MyRpc
                 {
                     Json::Value value;
                     value[KEY_HOST_IP] = addr.first;
-                    value[KEY_HOST_IP] = addr.second;
+                    //第一现场，调了一天，牛逼
+                    // value[KEY_HOST_IP] = addr.second;
+                    value[KEY_HOST_PORT] = addr.second;
                     _body[KEY_HOST].append(value);
                 }
             }
@@ -320,8 +322,12 @@ namespace MyRpc
                 std::vector<Address> hosts;
                 for(int i = 0;i<_body[KEY_HOST].size();++i)
                 {
-                    const Json::Value &host = _body[KEY_HOST][i];
-                    Address addr(host[KEY_HOST_IP].asString(), host[KEY_HOST_PORT].asInt());
+                    Address addr;
+                    const Json::Value &host = _body[KEY_HOST];
+                    // addr.first = _body[KEY_HOST][i][KEY_HOST_IP].asString();
+                    // addr.second = _body[KEY_HOST][i][KEY_HOST_PORT].asInt();
+                    addr.first = host[i][KEY_HOST_IP].asString();
+                    addr.second = host[i][KEY_HOST_PORT].asInt();
                     hosts.push_back(std::move(addr));
                 }
                 return hosts;

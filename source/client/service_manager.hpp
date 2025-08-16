@@ -31,6 +31,7 @@ namespace MyRpc{
                         ELOG("服务注册失败: %s", ErrReason(rsp->rcode()).c_str());
                         return false;
                     }
+                    // DLOG("Service register successfully: %s= %s:%d",msg->method().c_str(),
                     return true;
 
                 }
@@ -127,6 +128,7 @@ namespace MyRpc{
                         ELOG("尚未发现服务提供者!");
                         return false;
                     }
+                    DLOG("Discover response: %s", ser_res->serialize().c_str());
                     std::unique_lock<std::mutex> guard(_mutex);
                     std::vector<Address> hosts = ser_res->Hosts();
                     _hosts[ser_res->method()] = std::make_shared<MethodHosts>(hosts);
@@ -147,6 +149,7 @@ namespace MyRpc{
                             _hosts[msg->method()]  = std::make_shared<MethodHosts>();
                         }
                         _hosts[msg->method()]->appendHost(msg->host());
+                        ILOG("A new service has been launch: %s",msg->method().c_str());
                     }//服务下线了
                     else if(msg->serviceOpType() == ServiceOptype::SERVICE_OFFLINE)
                     {
@@ -156,6 +159,7 @@ namespace MyRpc{
                             if(_offline_call_back){
                                 _offline_call_back(msg->host());
                             }
+                            ILOG("A service has been offline: %s",msg->method().c_str());
                         }
                     }
                 }

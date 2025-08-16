@@ -68,22 +68,22 @@ namespace MyRpc
                 //上层在发送请求时传入future,将其关联到ReqDesc中的promise,onResponse后，会将收到的响应设置进future,外部通过get获取响应
                 bool send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,std::future<MessageBase::ptr>& resp)
                 {
-                    DLOG("进入异步requestor: send");
+                    // DLOG("进入异步requestor: send");
                     RequestDesc::ptr desc = insertDesc(msg,ReqType::REQ_ASYNC);
                     if(desc.get()==nullptr){
                         ELOG("构造请求描述失败!");
                         return false;
                     }
-                    DLOG("准备调用send");
+                    // DLOG("准备调用send");
                     conn->send(msg);
-                    DLOG("准备get_futurte");
+                    // DLOG("准备get_futurte");
                     resp = desc->_response.get_future();
-                    DLOG("离开异步requestor: send");
+                    // DLOG("离开异步requestor: send");
                     return true;
                 }
                 //同步获取响应
                 bool send(const ConnectionBase::ptr& conn, const MessageBase::ptr& msg,MessageBase::ptr& resp){
-                    DLOG("进入同步requestor: send");
+                    // DLOG("进入同步requestor: send");
                     std::future<MessageBase::ptr> resp_future;
                     bool ret = send(conn,msg,resp_future);
                     if(ret == false){
@@ -91,7 +91,7 @@ namespace MyRpc
                     }
                     //立即get达到同步的效果
                     resp = resp_future.get();
-                    DLOG("离开同步requestor: send");
+                    // DLOG("离开同步requestor: send");
                     return true;
                 }
             private:
