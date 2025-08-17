@@ -3,7 +3,6 @@
 #include "../network/message.hpp"
 #include <set>
 #include <unordered_set>
-
 namespace MyRpc
 {
     namespace Server
@@ -14,44 +13,161 @@ namespace MyRpc
                 //To dispatcher
                 void onTopicRequest(const ConnectionBase::ptr &conn, const TopicRequest::ptr &msg){
                     //create、delete、subscribe、cancel、publish
-
+                    TopicOptype topic_optype = msg->topicOpType();
+                    bool ret = true;
+                    switch(topic_optype){
+                        //主题的创建
+                        case TopicOptype::TOPIC_CREATE: createTopic(conn, msg); break;
+                        //主题的删除
+                        case TopicOptype::TOPIC_REMOVE: removeTopic(conn, msg); break;
+                        //主题的订阅
+                        case TopicOptype::TOPIC_SUBSCRIBE: ret = subscribeTopic(conn, msg); break;
+                        //主题的取消订阅
+                        case TopicOptype::TOPIC_CANCEL: cancelTopic(conn, msg); break;
+                        //主题消息的发布
+                        case TopicOptype::TOPIC_PUBLISH: ret = publishMsg(conn, msg); break;
+                        default:  return responseErr(conn, msg);
+                    }
+                    if (ret == false) return responseErr(conn, msg);
+                    return responseNormal(conn, msg);
                 }
-                void onShutDown(const ConnectionBase::ptr &conn); 
+                
+                void onShutDown(const ConnectionBase::ptr &conn){
+                    //only handle when this conn is a subscriber
+                    std::vector<Topic::ptr> topics;
+                    Subscriber::ptr subscriber;
+                    {
+                        std::lock_guard<std::mutex> guard(_mutex);
+                        auto iter = _subscribers.find(conn);
+                        if(iter == _subscribers.end()){
+                            return;
+                        }
+                        subscriber = iter->second;
+                        for(const std::string &topic: subscriber->topics){
+                            auto iter_topic = _topics.find(topic);
+                            if(iter_topic == _topics.end()){
+                                continue;
+                            }
+                            //find topics subscribed by this person
+                            topics.push_back(iter_topic->second);
+                        }
+                        _subscribers.erase(conn);
+                    }
+                    for(auto &topic: topics){
+                        topic->removeSubscriber(subscriber);
+                    }
+                }
             private:
-                void removeTopic(const std::string &topic_name){
-
-                    std::vector<Subscriber::ptr> pending_remove;
+                void responseNormal(const ConnectionBase::ptr &conn, const TopicRequest::ptr &req){
+                    auto res = MessageFactory::create<TopicResponse>();
+                    res->SetId(req->GetId());
+                    res->SetType(Mtype::RSP_TOPIC);
+                    res->setRcode(Rcode::RCODE_OK);
+                    conn->send(res);
+                }
+                void responseErr(const ConnectionBase::ptr &conn, const TopicRequest::ptr &req){
+                    auto res = MessageFactory::create<TopicResponse>();
+                    res->SetId(req->GetId());
+                    res->SetType(Mtype::RSP_TOPIC);
+                    res->setRcode(Rcode::RCODE_INVALID_OPTYPE);
+                    conn->send(res);
+                }
+                void responseNoTopic(const ConnectionBase::ptr &conn,const TopicRequest::ptr &msg){
+                    auto res = MessageFactory::create<TopicResponse>();
+                    res->setRcode(Rcode::RCODE_NOT_FOUND_TOPIC);
+                    res->SetId(msg->GetId());
+                    res->SetType(Mtype::RSP_TOPIC);
+                    conn->send(res);
+                }
+                void removeTopic(const ConnectionBase::ptr &conn,const TopicRequest::ptr &msg){
+                    std::string topic_name = msg->topicKey();
+                    Topic::ptr topic;
                     {
                         std::lock_guard<std::mutex> guard(_mutex);
                         auto iter = _topics.find(topic_name);
                         if(iter==_topics.end()){
                             return;
                         }
-                        Topic::ptr topic = iter->second;
-                        std::unordered_set<ConnectionBase::ptr> subscribers = topic->_subscribers;
-                        for(const ConnectionBase::ptr &conn: subscribers){
-                            auto it = _subscribers.find(conn);
-                            if(it == _subscribers.end()){
-                                continue;
-                            }
-                            Subscriber::ptr subscriber = it->second;
-                            pending_remove.push_back(std::move(subscriber));
-                        }
+                        topic = iter->second;
                         _topics.erase(topic_name);
                     }
                     // Prevent two unrelated locks from affecting each other and causing performance degration
                     // so remove here, 
-                    for(auto &subs: pending_remove){
+                    for(const Subscriber::ptr &subs: topic->_subscribers){
                         subs->unsubscribe(topic_name);
                     }
+                    return;
 
                 }
                 void createTopic(const ConnectionBase::ptr &conn,const TopicRequest::ptr &msg){
-                    std::lock_guard<std::mutex> guard(_mutex);
                     Topic::ptr topic = std::make_shared<Topic>(msg->topicKey());
+                    std::lock_guard<std::mutex> guard(_mutex);
                     _topics.insert(std::make_pair(msg->topicKey(),topic));
+                    return;
                 }
-
+                bool subscribeTopic(const ConnectionBase::ptr &conn,const TopicRequest::ptr &msg){
+                    //if doesn't has this subscriber,add it
+                    //if doesn't has this topic, response error
+                    Subscriber::ptr subscriber;
+                    Topic::ptr topic;
+                    {
+                        std::lock_guard<std::mutex> guard(_mutex);
+                        auto iter_sub = _subscribers.find(conn);
+                        auto iter_topic = _topics.find(msg->topicKey());
+                        if(iter_sub ==_subscribers.end()){
+                            auto subscriber = std::make_shared<Subscriber>(conn);
+                            iter_sub = _subscribers.insert(std::make_pair(conn,subscriber)).first;
+                        }
+                        if(iter_topic != _topics.end()){
+                            topic = iter_topic->second;
+                        }
+                        else{
+                            return false;
+                        }
+                        subscriber = iter_sub->second;
+                    }
+                    subscriber->subscribe(msg->topicKey());
+                    topic->appendSubscriber(subscriber);
+                    return true;
+                }
+                void cancelTopic(const ConnectionBase::ptr &conn,const TopicRequest::ptr &msg){
+                    //if doesn't has this subscriber, do nothing
+                    //if doesn't has this topic, do nothing
+                    Subscriber::ptr subscriber;
+                    Topic::ptr topic;
+                    {
+                        std::lock_guard<std::mutex> guard(_mutex);
+                        auto iter_sub = _subscribers.find(conn);
+                        if(iter_sub == _subscribers.end()){
+                            return;
+                        }
+                        subscriber = iter_sub->second;
+                        auto iter_topic = _topics.find(msg->topicKey());
+                        if(iter_topic != _topics.end()){
+                            topic = iter_topic->second;
+                        }
+                        else{
+                            return;
+                        }
+                    }
+                    topic->removeSubscriber(subscriber);
+                    subscriber->unsubscribe(msg->topicKey());
+                    return;
+                    
+                }
+                bool publishMsg(const ConnectionBase::ptr &conn,const TopicRequest::ptr &msg){
+                    Topic::ptr topic;
+                    {
+                        std::lock_guard<std::mutex> guard(_mutex);
+                        auto iter_topic = _topics.find(msg->topicKey());
+                        if(iter_topic == _topics.end()){
+                            return false;
+                        }
+                        Topic::ptr topic = iter_topic->second;
+                    }
+                    topic->pushMessage(msg);
+                    return true;
+                }
                 struct Subscriber{
                     using ptr = std::shared_ptr<Subscriber>;
                     ConnectionBase::ptr conn;
@@ -75,33 +191,31 @@ namespace MyRpc
                     using ptr = std::shared_ptr<Topic>;
                     std::string topic_name;
                     std::mutex mutex;
-                    std::unordered_set<ConnectionBase::ptr> _subscribers; //subscribers of this topic
+                    std::unordered_set<Subscriber::ptr> _subscribers; //subscribers of this topic
                     Topic(const std::string &name):topic_name(name){}
                     //call when someone subscribe this topic
-                    void appendSubscriber(const ConnectionBase::ptr &conn){
+                    void appendSubscriber(const Subscriber::ptr &subscriber){
                         std::unique_lock<std::mutex> guard(mutex);
-                        _subscribers.insert(conn);
+                        _subscribers.insert(subscriber);
                     }
                     //call when someone unsubscribe this topic
-                    void removeSubscriber(const ConnectionBase::ptr &conn){
+                    void removeSubscriber(const Subscriber::ptr &subscriber){
                         std::unique_lock<std::mutex> guard(mutex);
-                        _subscribers.erase(conn);
+                        _subscribers.erase(subscriber);
                     }
                     //call when message push to this topic
                     void pushMessage(const MessageBase::ptr &msg){
                         std::unique_lock<std::mutex> guard(mutex);
                         for(const auto &subscriber : _subscribers){
-                            subscriber->send(msg);
+                            subscriber->conn->send(msg);
                         }
                     }
                 };
-
             private:
                 std::mutex _mutex;
                 //conn: subs
                 std::unordered_map<std::string, Topic::ptr> _topics;
                 std::unordered_map<ConnectionBase::ptr, Subscriber::ptr> _subscribers;
-
         };
     }
 }
