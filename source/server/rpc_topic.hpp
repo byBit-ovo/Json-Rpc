@@ -16,15 +16,10 @@ namespace MyRpc
                     TopicOptype topic_optype = msg->topicOpType();
                     bool ret = true;
                     switch(topic_optype){
-                        //主题的创建
                         case TopicOptype::TOPIC_CREATE: createTopic(conn, msg); break;
-                        //主题的删除
                         case TopicOptype::TOPIC_REMOVE: removeTopic(conn, msg); break;
-                        //主题的订阅
                         case TopicOptype::TOPIC_SUBSCRIBE: ret = subscribeTopic(conn, msg); break;
-                        //主题的取消订阅
                         case TopicOptype::TOPIC_CANCEL: cancelTopic(conn, msg); break;
-                        //主题消息的发布
                         case TopicOptype::TOPIC_PUBLISH: ret = publishMsg(conn, msg); break;
                         default:  return responseErr(conn, msg);
                     }
