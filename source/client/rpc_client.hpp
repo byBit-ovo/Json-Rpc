@@ -2,6 +2,7 @@
 #include "../network/dispatcher.hpp"
 #include "rpc_caller.hpp"
 #include "service_manager.hpp"
+#include "topic.hpp"
 #include "../network/message.hpp"
 
 namespace MyRpc{
@@ -217,6 +218,58 @@ namespace MyRpc{
                 // std::unordered_map<std::string, std::vector<ClientBase::ptr>> _rpc_clients;
                 std::unordered_map<Address, ClientBase::ptr,AddrHash> _rpc_clients;  //如果启用了服务发现，则建立该Rpc客户端连接池
 
+        };
+
+        class TopicClient{
+            public:
+                using ptr = std::shared_ptr<TopicClient>;
+                TopicClient(const std::string &ip,int port):
+                _requestor(std::make_shared<Requestor>()),
+                _dispatcher(std::make_shared<Dispatcher>()),
+                _manager(std::make_shared<TopicManager>(_requestor)),
+                _client(ClientFactory::create(ip,port))
+                {
+                    //向dispatchetr注册 'Topic调用者收到Topic响应' 的回调
+                    auto topic_rsp_call = std::bind(&Requestor::onResponse,_requestor.get(),
+                    std::placeholders::_1,std::placeholders::_2);
+                    _dispatcher->registerHandler<MessageBase>(Mtype::RSP_TOPIC,topic_rsp_call);
+
+                    //向dispatchetr注册 'Topic订阅者收到Topic推送消息的请求' 的回调
+                    auto topic_handler = std::bind(&TopicManager::onPublish,_manager.get(),
+                    std::placeholders::_1,std::placeholders::_2);
+                    _dispatcher->registerHandler<TopicRequest>(Mtype::REQ_TOPIC,topic_handler);
+
+                    auto call_back = std::bind(&Dispatcher::messageCallBack,_dispatcher.get(),
+                        std::placeholders::_1,std::placeholders::_2);
+                    _client->SetMessageCallBack(call_back);
+                    _client->connect();
+
+                }
+                bool createTopic(const std::string &name){
+                    return _manager->createTopic(_client->connection(),name);
+                }
+                bool removeTopic(const std::string &name){
+                    return _manager->removeTopic(_client->connection(),name);
+                }
+                bool cancelTopic(const std::string &name){
+                    return _manager->cancelTopic(_client->connection(),name);
+                }
+
+                bool publish(const std::string &topic_name,const std::string &msg){
+                    return _manager->publish(_client->connection(),topic_name,msg);
+                }
+                //subscribe topic and regsiter handler to handle it 
+                bool subscribeTopic(const std::string &name,const TopicManager::Msg_Func_t &handler){ 
+                    return _manager->subscribeTopic(_client->connection(),name,handler);
+                }
+                void shutDown(){
+                    _client->shutDown();
+                }
+            private:
+                Requestor::ptr _requestor;
+                Dispatcher::ptr _dispatcher;
+                TopicManager::ptr _manager;
+                ClientBase::ptr _client;
         };
     }
 }

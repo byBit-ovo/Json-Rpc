@@ -88,7 +88,7 @@ namespace MyRpc
                     }
                     // Prevent two unrelated locks from affecting each other and causing performance degration
                     // so remove here, 
-                    for(const Subscriber::ptr &subs: topic->_subscribers){
+                    for(const Subscriber::ptr &subs: topic->subscribers){
                         subs->unsubscribe(topic_name);
                     }
                     return;
@@ -158,8 +158,9 @@ namespace MyRpc
                         if(iter_topic == _topics.end()){
                             return false;
                         }
-                        Topic::ptr topic = iter_topic->second;
+                        topic = iter_topic->second;
                     }
+
                     topic->pushMessage(msg);
                     return true;
                 }
@@ -168,6 +169,7 @@ namespace MyRpc
                     ConnectionBase::ptr conn;
                     std::mutex mutex;
                     std::unordered_set<std::string> topics;           //topics subscribed by this people
+                    //remove this people from topics subscribed by it when offline
                     Subscriber(const ConnectionBase::ptr &con):conn(con){}
 
                     //call when this person subscribe sometopic
@@ -186,22 +188,26 @@ namespace MyRpc
                     using ptr = std::shared_ptr<Topic>;
                     std::string topic_name;
                     std::mutex mutex;
-                    std::unordered_set<Subscriber::ptr> _subscribers; //subscribers of this topic
+                    std::unordered_set<Subscriber::ptr> subscribers; //subscribers of this topic
                     Topic(const std::string &name):topic_name(name){}
                     //call when someone subscribe this topic
                     void appendSubscriber(const Subscriber::ptr &subscriber){
                         std::unique_lock<std::mutex> guard(mutex);
-                        _subscribers.insert(subscriber);
+                        subscribers.insert(subscriber);
                     }
                     //call when someone unsubscribe this topic
                     void removeSubscriber(const Subscriber::ptr &subscriber){
                         std::unique_lock<std::mutex> guard(mutex);
-                        _subscribers.erase(subscriber);
+                        subscribers.erase(subscriber);
                     }
-                    //call when message push to this topic
+                    //push to all subscribers when message push to this topic
                     void pushMessage(const MessageBase::ptr &msg){
                         std::unique_lock<std::mutex> guard(mutex);
-                        for(const auto &subscriber : _subscribers){
+                        if(subscribers.empty()){
+                            std::cout<<topic_name<<" has no members";
+                            return;
+                        }
+                        for(const auto &subscriber : subscribers){
                             subscriber->conn->send(msg);
                         }
                     }

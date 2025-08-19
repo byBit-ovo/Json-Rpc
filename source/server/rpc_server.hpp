@@ -3,10 +3,11 @@
 #include "../client/rpc_client.hpp"
 #include "rpc_router.hpp"
 #include "service_manager.hpp"
+#include "rpc_topic.hpp"
 
 namespace MyRpc{
     namespace Server{
-        //管理服务的注册与发现请求
+        //管理服务的注册与发现请求,注册中心
         class RegisterServer{
             public:
                 using ptr = std::shared_ptr<RegisterServer>;
@@ -76,5 +77,33 @@ namespace MyRpc{
                 Dispatcher::ptr _dispatcher; 
                 RpcRouter::ptr _router;
         };
+        //消息发布订阅服务
+        class TopicServer{
+            public:
+                using ptr = std::shared_ptr<TopicServer>;
+                TopicServer(int port):
+                _server(ServerFactory::create(port)),
+                _dispatcher(std::make_shared<Dispatcher>()),
+                _manager(std::make_shared<TopicManager>()){
+                    auto topic_req = std::bind(&TopicManager::onTopicRequest,_manager.get(),
+                    std::placeholders::_1,std::placeholders::_2);
+                    //注册 '服务发现与服务注册' 的回调函数
+                    _dispatcher->registerHandler<TopicRequest>(Mtype::REQ_TOPIC,topic_req);
+                    auto message_call = std::bind(&Dispatcher::messageCallBack,_dispatcher.get(),
+                    std::placeholders::_1,std::placeholders::_2);
+                    //MuduoServer的总接口
+                    auto close_call_back = std::bind(&TopicManager::onShutDown,_manager.get(),std::placeholders::_1);
+                    _server->SetMessageCallBack(message_call);
+                    _server->SetCloseCallBack(close_call_back);
+                }
+                void start(){
+                    _server->start();
+                }
+            private:
+                ServerBase::ptr _server;
+                Dispatcher::ptr _dispatcher; 
+                TopicManager::ptr _manager;
+        };
+
     }
 }
