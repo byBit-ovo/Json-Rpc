@@ -311,7 +311,7 @@ namespace MyRpc
                 {
                     Json::Value value;
                     value[KEY_HOST_IP] = addr.first;
-                    //第一现场，调了一天，牛逼
+                    //第一现场，调了一天，niubi
                     // value[KEY_HOST_IP] = addr.second;
                     value[KEY_HOST_PORT] = addr.second;
                     _body[KEY_HOST].append(value);

@@ -103,6 +103,7 @@ namespace MyRpc
         virtual std::string serialize(const MessageBase::ptr &msg)override
         {
             //|--headLen--|--Mtype--|--idLen-- |------id--------|--body--|
+            //48-1-23-0002223274755-8833-{"optype": "publish","Method":"Add"}
             std::string body = msg->serialize();
             std::string id = msg->GetId();
             int32_t mtype = htonl(static_cast<int>(msg->GetType()));
