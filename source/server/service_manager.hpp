@@ -38,9 +38,9 @@ namespace MyRpc
                     std::unordered_map<ConnectionBase::ptr, Provider::ptr>::iterator iter;
                     {
                         std::unique_lock<std::mutex> guard(_mutex);
-                        iter = _conns.find(conn);
-                        if(iter == _conns.end()){
-                            iter = _conns.insert({conn,std::make_shared<Provider>(host,conn)}).first;
+                        iter = _connsToProvider.find(conn);
+                        if(iter == _connsToProvider.end()){
+                            iter = _connsToProvider.insert({conn,std::make_shared<Provider>(host,conn)}).first;
                         }
                         //该服务新增服务提供者
                         _providers[method].insert(iter->second);
@@ -53,8 +53,8 @@ namespace MyRpc
                 //当有一个服务提供者断开连接时，找到Provider,下线他的所有服务,或已经存在的服务者上线新服务时
                 Provider::ptr findProvider(const ConnectionBase::ptr &conn){
                     std::unique_lock<std::mutex> guard(_mutex);
-                    auto iter = _conns.find(conn);
-                    if(iter == _conns.end()){
+                    auto iter = _connsToProvider.find(conn);
+                    if(iter == _connsToProvider.end()){
                         return Provider::ptr();
                     }
                     return iter->second;
@@ -62,8 +62,8 @@ namespace MyRpc
                 //当一个服务提供者断开连接时，删除他的关联信息
                 bool removeProvider(const ConnectionBase::ptr &conn){
                     std::unique_lock<std::mutex> guard(_mutex);
-                    auto iter = _conns.find(conn);
-                    if(iter == _conns.end()){
+                    auto iter = _connsToProvider.find(conn);
+                    if(iter == _connsToProvider.end()){
                         return false;
                     }
                     //移除该服务提供者所有服务
@@ -75,7 +75,7 @@ namespace MyRpc
                         std::set<Provider::ptr> &these_methods = it->second;
                         these_methods.erase(iter->second);
                     }
-                    _conns.erase(conn);
+                    _connsToProvider.erase(conn);
                     return true;
                 }
                 std::vector<Address> getHosts(const std::string &method)
@@ -95,7 +95,7 @@ namespace MyRpc
                 //某一个服务的所有提供者
                 std::unordered_map<std::string,std::set<Provider::ptr>> _providers;
                 //每个连接与服务者的关系
-                std::unordered_map<ConnectionBase::ptr, Provider::ptr> _conns;
+                std::unordered_map<ConnectionBase::ptr, Provider::ptr> _connsToProvider;
         };
 
         class DiscoverManager{

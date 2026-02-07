@@ -4,7 +4,6 @@ void onResult(const Json::Value &result){
 }
 void testCommunication(){
     MyRpc::Client::RpcClient::ptr client = std::make_shared<MyRpc::Client::RpcClient>(false,"127.0.0.1",10086);
-    client->connect();
     Json::Value para;
     para["num1"] = 4;
     para["num2"] = 7;

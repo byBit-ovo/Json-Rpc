@@ -1,5 +1,7 @@
-INCLUDE = -I../../muduo/release-install-cpp11/include/
-LIB     = -L../../muduo/release-install-cpp11/lib/ -lmuduo_net  -lmuduo_base -lpthread -ljsoncpp
+# INCLUDE = -I../../muduo/release-install-cpp11/include/
+# LIB     = -L../../muduo/release-install-cpp11/lib/ -lmuduo_net  -lmuduo_base -lpthread -ljsoncpp
+
+LIB = -ljsoncpp -lmuduo_net  -lmuduo_base
 
 .PHONY: clean all
 all: server client
